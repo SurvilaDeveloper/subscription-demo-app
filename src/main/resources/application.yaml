@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: subscription-demo-app
+
+server:
+  port: 8080
+
+demo-app:
+  mock-payment:
+    base-url: ${MOCK_PAYMENT_BASE_URL:http://localhost:9090}
+    webhook-secret: ${MOCK_PAYMENT_WEBHOOK_SECRET:dev-secret}
+  storage:
+    type: ${DEMO_APP_STORAGE_TYPE:memory}
+    file-path: ${DEMO_APP_STORAGE_FILE_PATH:./data/subscription-demo-state.bin}
