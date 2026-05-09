@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StreamBox Demo</title>
+    <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+<div class="app-shell">
+    <header class="hero">
+        <div>
+            <p class="eyebrow">Subscription demo app</p>
+            <h1>StreamBox Demo</h1>
+            <p class="hero-description">
+                Aplicación principal de ejemplo para aprender cómo una plataforma se integra con Mock Payment Service.
+            </p>
+        </div>
+
+        <div class="hero-actions">
+            <button id="refreshButton" class="button button-primary" type="button">
+                Refrescar
+            </button>
+
+            <button id="resetButton" class="button button-danger" type="button">
+                Resetear demo
+            </button>
+        </div>
+    </header>
+
+    <section id="messageBox" class="message hidden"></section>
+
+    <main class="dashboard-grid">
+        <section class="card card-full">
+            <div class="card-header">
+                <div>
+                    <h2>Estado de la aplicación principal</h2>
+                    <p>Datos internos guardados por StreamBox Demo.</p>
+                </div>
+            </div>
+
+            <div id="stateGrid" class="metric-grid"></div>
+        </section>
+
+        <section class="card card-full">
+            <div class="card-header">
+                <div>
+                    <h2>Planes disponibles</h2>
+                    <p>Planes hardcodeados que luego se enviarán a Mock Payment Service.</p>
+                </div>
+                <span id="plansCount" class="pill">0</span>
+            </div>
+
+            <div id="plansGrid" class="plans-grid"></div>
+        </section>
+
+        <section class="card card-full">
+            <div class="card-header">
+                <div>
+                    <h2>Suscripciones internas</h2>
+                    <p>Suscripciones guardadas por la aplicación principal.</p>
+                </div>
+                <span id="subscriptionsCount" class="pill">0</span>
+            </div>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>ID interno</th>
+                        <th>Plan</th>
+                        <th>Email</th>
+                        <th>Provider subscription ID</th>
+                        <th>Estado</th>
+                        <th>Actualizado</th>
+                    </tr>
+                    </thead>
+                    <tbody id="subscriptionsTable"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card card-full">
+            <div class="card-header">
+                <div>
+                    <h2>Pagos internos</h2>
+                    <p>Pagos registrados por la aplicación principal después de consultar al proveedor.</p>
+                </div>
+                <span id="paymentsCount" class="pill">0</span>
+            </div>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>ID interno</th>
+                        <th>Suscripción</th>
+                        <th>Provider payment ID</th>
+                        <th>Estado</th>
+                        <th>Monto</th>
+                        <th>Creado</th>
+                    </tr>
+                    </thead>
+                    <tbody id="paymentsTable"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card card-full">
+            <div class="card-header">
+                <div>
+                    <h2>Eventos internos</h2>
+                    <p>Log educativo del flujo de la aplicación principal.</p>
+                </div>
+                <span id="eventsCount" class="pill">0</span>
+            </div>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Tipo</th>
+                        <th>Mensaje</th>
+                        <th>Creado</th>
+                    </tr>
+                    </thead>
+                    <tbody id="eventsTable"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+</div>
+
+<script src="./app.js"></script>
+</body>
+</html>
