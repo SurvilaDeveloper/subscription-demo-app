@@ -4,6 +4,7 @@ const endpoints = {
     subscriptions: "/api/demo/subscriptions",
     payments: "/api/demo/payments",
     events: "/api/demo/events",
+    startSubscription: "/api/subscriptions/start",
 };
 
 const elements = {
@@ -22,6 +23,11 @@ const elements = {
     subscriptionsTable: document.querySelector("#subscriptionsTable"),
     paymentsTable: document.querySelector("#paymentsTable"),
     eventsTable: document.querySelector("#eventsTable"),
+
+    subscriptionForm: document.querySelector("#subscriptionForm"),
+    planSelect: document.querySelector("#planSelect"),
+    payerEmailInput: document.querySelector("#payerEmailInput"),
+    cardNumberInput: document.querySelector("#cardNumberInput"),
 };
 
 function escapeHtml(value) {
@@ -189,6 +195,8 @@ function renderState(state) {
 function renderPlans(plans) {
     elements.plansCount.textContent = plans.length;
 
+    renderPlanSelect(plans);
+
     if (!plans.length) {
         elements.plansGrid.innerHTML = `<div class="empty">No hay planes disponibles.</div>`;
         return;
@@ -284,6 +292,32 @@ function tableEmptyRow(columns, message) {
     `;
 }
 
+async function startSubscription(event) {
+    event.preventDefault();
+
+    const request = {
+        plan_id: elements.planSelect.value,
+        payer_email: elements.payerEmailInput.value.trim(),
+        card_number: elements.cardNumberInput.value,
+    };
+
+    try {
+        const response = await requestJson(endpoints.startSubscription, {
+            method: "POST",
+            body: JSON.stringify(request),
+        });
+
+        showMessage(
+            `Suscripción ${response.subscription.id} creada con estado ${response.subscription.status}. Pago: ${response.payment.status}.`
+        );
+
+        await loadDashboard({ silent: true });
+    } catch (error) {
+        console.error(error);
+        showMessage(`No se pudo iniciar la suscripción: ${error.message}`, "error");
+    }
+}
+
 async function resetState() {
     const confirmed = window.confirm(
         "¿Seguro que querés resetear el estado interno de StreamBox Demo?"
@@ -310,6 +344,30 @@ async function resetState() {
     }
 }
 
+function renderPlanSelect(plans) {
+    const previousValue = elements.planSelect.value;
+
+    if (!plans.length) {
+        elements.planSelect.innerHTML = `<option value="">Sin planes disponibles</option>`;
+        return;
+    }
+
+    elements.planSelect.innerHTML = plans
+        .map((plan) => `
+            <option value="${escapeHtml(plan.id)}">
+                ${escapeHtml(plan.name)} · ${escapeHtml(formatMoney(plan.amount, plan.currency))} / mes
+            </option>
+        `)
+        .join("");
+
+    const exists = plans.some((plan) => plan.id === previousValue);
+
+    if (exists) {
+        elements.planSelect.value = previousValue;
+    }
+}
+
+elements.subscriptionForm.addEventListener("submit", startSubscription);
 elements.refreshButton.addEventListener("click", () => loadDashboard());
 elements.resetButton.addEventListener("click", resetState);
 

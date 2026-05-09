@@ -45,6 +45,47 @@
         <section class="card card-full">
             <div class="card-header">
                 <div>
+                    <h2>Suscribirse a StreamBox</h2>
+                    <p>Elegí un plan, ingresá una tarjeta ficticia y simulá el pago contra Mock Payment Service.</p>
+                </div>
+            </div>
+
+            <form id="subscriptionForm" class="subscription-form">
+                <div class="form-grid">
+                    <label class="field">
+                        <span>Plan</span>
+                        <select id="planSelect" required>
+                            <option value="">Cargando planes...</option>
+                        </select>
+                    </label>
+
+                    <label class="field">
+                        <span>Email</span>
+                        <input id="payerEmailInput" type="email" value="cliente@test.com" required />
+                    </label>
+
+                    <label class="field">
+                        <span>Tarjeta ficticia</span>
+                        <select id="cardNumberInput" required>
+                            <option value="4111111111111111">4111111111111111 · Pago aprobado</option>
+                            <option value="4000000000000002">4000000000000002 · Sin fondos</option>
+                            <option value="4000000000009995">4000000000009995 · Número inválido</option>
+                            <option value="4000000000000069">4000000000000069 · Tarjeta vencida</option>
+                            <option value="4000000000000341">4000000000000341 · Pago pendiente</option>
+                            <option value="4000000000000259">4000000000000259 · Error genérico</option>
+                        </select>
+                    </label>
+                </div>
+
+                <button class="button button-primary" type="submit">
+                    Suscribirme y pagar
+                </button>
+            </form>
+        </section>
+
+        <section class="card card-full">
+            <div class="card-header">
+                <div>
                     <h2>Planes disponibles</h2>
                     <p>Planes hardcodeados que luego se enviarán a Mock Payment Service.</p>
                 </div>
