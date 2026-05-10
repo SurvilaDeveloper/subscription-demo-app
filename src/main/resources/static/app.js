@@ -322,6 +322,86 @@ http://subscription-demo-app:8080/api/webhooks/mock-payment</code></pre>
         `,
     },
     {
+        id: "code-to-emulate",
+        title: "Código para emular",
+        description: "Qué partes de este proyecto sirven como referencia para un proyecto real.",
+        html: `
+        <h3>Qué código conviene emular en un proyecto real</h3>
+
+        <p>
+            StreamBox Demo tiene código educativo y código que representa patrones útiles para una aplicación real.
+            La idea no es copiar todo tal cual, sino identificar qué partes muestran una arquitectura razonable
+            para integrar pagos.
+        </p>
+
+        <h4>Código que sí conviene mirar</h4>
+
+        <ul>
+            <li><strong>MockPaymentClient:</strong> muestra cómo aislar las llamadas HTTP al proveedor.</li>
+            <li><strong>SubscriptionService:</strong> muestra cómo orquestar suscripción interna, proveedor, pagos y webhooks.</li>
+            <li><strong>MockPaymentWebhookController:</strong> muestra cómo recibir webhooks sin meter toda la lógica en el controller.</li>
+            <li><strong>WebhookSignatureVerifier:</strong> muestra cómo separar la validación de firma.</li>
+            <li><strong>DemoSubscription:</strong> muestra la idea de guardar una suscripción interna con un ID externo del proveedor.</li>
+            <li><strong>DemoPayment:</strong> muestra la idea de registrar pagos internos asociados a la suscripción.</li>
+            <li><strong>DemoReceivedWebhook:</strong> muestra cómo auditar webhooks recibidos, procesados y fallidos.</li>
+            <li><strong>Mapeo de estados:</strong> muestra cómo convertir estados externos en estados propios de la app.</li>
+        </ul>
+
+        <h4>Código que no conviene copiar tal cual</h4>
+
+        <ul>
+            <li><strong>DemoStore:</strong> sirve para la demo, pero en producción debería reemplazarse por base de datos y repositorios.</li>
+            <li><strong>PlanCatalogService hardcodeado:</strong> en producción los planes deberían venir de base de datos o configuración administrable.</li>
+            <li><strong>Tarjetas ficticias:</strong> solo existen porque usamos un proveedor mock.</li>
+            <li><strong>UI estática:</strong> sirve para aprender, pero no es el patrón obligatorio de una app real.</li>
+            <li><strong>Endpoints de simulación:</strong> sirven para pruebas locales, no para producción.</li>
+        </ul>
+
+        <h4>Patrón principal a emular</h4>
+
+        <pre><code>Crear suscripción interna
+  ↓
+Llamar al proveedor de pagos
+  ↓
+Guardar providerSubscriptionId
+  ↓
+Recibir webhook firmado
+  ↓
+Validar firma
+  ↓
+Consultar recurso actualizado al proveedor
+  ↓
+Actualizar estado interno
+  ↓
+Registrar pago, evento o error</code></pre>
+
+        <h4>En un proyecto real</h4>
+
+        <p>
+            En una aplicación productiva, estas clases deberían adaptarse a entidades, repositorios y servicios reales.
+        </p>
+
+        <pre><code>BusinessSubscription
+BusinessPayment
+PaymentWebhookEvent
+PaymentProviderClient
+BillingService
+WebhookSignatureVerifier
+PaymentWebhookController</code></pre>
+
+        <div class="help-callout">
+            La enseñanza más importante de StreamBox no es cómo simular pagos, sino cómo una aplicación principal
+            debería guardar estado propio, validar webhooks, consultar al proveedor y mapear estados externos a internos.
+        </div>
+
+        <p>
+            Para más detalle, revisar el archivo:
+        </p>
+
+        <pre><code>docs/code-to-emulate-in-real-project.md</code></pre>
+    `,
+    },
+    {
         id: "streambox-vs-studio",
         title: "StreamBox vs Studio",
         description: "Diferencia entre la app principal y el panel del mock.",
