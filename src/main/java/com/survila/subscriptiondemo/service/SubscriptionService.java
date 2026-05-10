@@ -6,9 +6,15 @@ import com.survila.subscriptiondemo.dto.StartSubscriptionResponse;
 import com.survila.subscriptiondemo.dto.mock.MockCreatePreapprovalRequest;
 import com.survila.subscriptiondemo.dto.mock.MockPayWithCardRequest;
 import com.survila.subscriptiondemo.dto.mock.MockPayWithCardResponse;
+import com.survila.subscriptiondemo.dto.mock.MockPaymentResponse;
 import com.survila.subscriptiondemo.dto.mock.MockPreapprovalResponse;
+import com.survila.subscriptiondemo.dto.webhook.MockPaymentWebhookPayload;
 import com.survila.subscriptiondemo.exception.BadRequestException;
-import com.survila.subscriptiondemo.model.*;
+import com.survila.subscriptiondemo.model.DemoPayment;
+import com.survila.subscriptiondemo.model.DemoSubscription;
+import com.survila.subscriptiondemo.model.PaymentStatus;
+import com.survila.subscriptiondemo.model.Plan;
+import com.survila.subscriptiondemo.model.SubscriptionStatus;
 import com.survila.subscriptiondemo.store.DemoStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -82,23 +88,15 @@ public class SubscriptionService {
         subscription.setStatus(mapPreapprovalStatus(payResponse.preapprovalStatus()));
         store.saveSubscription(subscription);
 
-        DemoPayment payment = new DemoPayment(
-                store.nextPaymentId(),
+        DemoPayment payment = savePaymentIfMissing(
                 subscription.getId(),
-                payResponse.payment().id(),
-                mapPaymentStatus(payResponse.payment().status()),
-                payResponse.payment().statusDetail(),
-                payResponse.payment().amount(),
-                payResponse.payment().currencyId(),
-                Instant.now()
+                payResponse.payment()
         );
 
-        store.savePayment(payment);
-
         store.addEvent(
-                "PAYMENT_CREATED",
-                "Payment %s was created from provider payment %s with status %s."
-                        .formatted(payment.getId(), payment.getProviderPaymentId(), payment.getStatus())
+                "PAYMENT_RESPONSE_RECEIVED",
+                "Direct payment response received from provider. Provider payment %s has status %s."
+                        .formatted(payResponse.payment().id(), payResponse.payment().status())
         );
 
         store.addEvent(
@@ -115,6 +113,106 @@ public class SubscriptionService {
                 payResponse.preapprovalStatus(),
                 payResponse.payment().status()
         );
+    }
+
+    public void processWebhook(MockPaymentWebhookPayload payload) {
+        if (payload == null || payload.data() == null || payload.data().id() == null) {
+            throw new BadRequestException("Invalid webhook payload.");
+        }
+
+        store.addEvent(
+                "WEBHOOK_RECEIVED",
+                "Webhook received: type=%s, action=%s, data.id=%s."
+                        .formatted(payload.type(), payload.action(), payload.data().id())
+        );
+
+        if ("payment".equals(payload.type()) && "payment.created".equals(payload.action())) {
+            processPaymentCreatedWebhook(payload.data().id());
+            return;
+        }
+
+        if ("preapproval".equals(payload.type())) {
+            processPreapprovalWebhook(payload.action(), payload.data().id());
+            return;
+        }
+
+        store.addEvent(
+                "WEBHOOK_IGNORED",
+                "Webhook ignored: unsupported type/action %s/%s."
+                        .formatted(payload.type(), payload.action())
+        );
+    }
+
+    private void processPaymentCreatedWebhook(String providerPaymentId) {
+        MockPaymentResponse providerPayment = mockPaymentClient.getPayment(providerPaymentId);
+
+        DemoSubscription subscription = store.findSubscriptionByProviderSubscriptionId(providerPayment.preapprovalId())
+                .orElseThrow(() -> new BadRequestException(
+                        "Internal subscription not found for provider subscription: " + providerPayment.preapprovalId()
+                ));
+
+        DemoPayment payment = savePaymentIfMissing(subscription.getId(), providerPayment);
+
+        MockPreapprovalResponse providerPreapproval = mockPaymentClient.getPreapproval(providerPayment.preapprovalId());
+
+        subscription.setStatus(mapPreapprovalStatus(providerPreapproval.status()));
+        store.saveSubscription(subscription);
+
+        store.addEvent(
+                "WEBHOOK_PAYMENT_PROCESSED",
+                "Webhook payment.created processed. Internal payment %s maps provider payment %s."
+                        .formatted(payment.getId(), providerPayment.id())
+        );
+
+        store.addEvent(
+                "SUBSCRIPTION_UPDATED_FROM_WEBHOOK",
+                "Internal subscription %s updated to %s after consulting provider preapproval %s."
+                        .formatted(subscription.getId(), subscription.getStatus(), providerPreapproval.id())
+        );
+    }
+
+    private void processPreapprovalWebhook(String action, String providerPreapprovalId) {
+        MockPreapprovalResponse providerPreapproval = mockPaymentClient.getPreapproval(providerPreapprovalId);
+
+        DemoSubscription subscription = store.findSubscriptionByProviderSubscriptionId(providerPreapproval.id())
+                .orElseThrow(() -> new BadRequestException(
+                        "Internal subscription not found for provider subscription: " + providerPreapproval.id()
+                ));
+
+        subscription.setStatus(mapPreapprovalStatus(providerPreapproval.status()));
+        store.saveSubscription(subscription);
+
+        store.addEvent(
+                "WEBHOOK_PREAPPROVAL_PROCESSED",
+                "Webhook %s processed. Internal subscription %s updated to %s."
+                        .formatted(action, subscription.getId(), subscription.getStatus())
+        );
+    }
+
+    private DemoPayment savePaymentIfMissing(String subscriptionId, MockPaymentResponse providerPayment) {
+        return store.findPaymentByProviderPaymentId(providerPayment.id())
+                .orElseGet(() -> {
+                    DemoPayment payment = new DemoPayment(
+                            store.nextPaymentId(),
+                            subscriptionId,
+                            providerPayment.id(),
+                            mapPaymentStatus(providerPayment.status()),
+                            providerPayment.statusDetail(),
+                            providerPayment.amount(),
+                            providerPayment.currencyId(),
+                            Instant.now()
+                    );
+
+                    store.savePayment(payment);
+
+                    store.addEvent(
+                            "PAYMENT_CREATED",
+                            "Internal payment %s was created from provider payment %s with status %s."
+                                    .formatted(payment.getId(), payment.getProviderPaymentId(), payment.getStatus())
+                    );
+
+                    return payment;
+                });
     }
 
     private MockCreatePreapprovalRequest buildCreatePreapprovalRequest(DemoSubscription subscription) {
@@ -140,7 +238,7 @@ public class SubscriptionService {
                 12,
                 2030,
                 "123",
-                false
+                true
         );
     }
 

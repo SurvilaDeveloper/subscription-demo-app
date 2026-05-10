@@ -3,6 +3,7 @@ package com.survila.subscriptiondemo.client;
 import com.survila.subscriptiondemo.dto.mock.MockCreatePreapprovalRequest;
 import com.survila.subscriptiondemo.dto.mock.MockPayWithCardRequest;
 import com.survila.subscriptiondemo.dto.mock.MockPayWithCardResponse;
+import com.survila.subscriptiondemo.dto.mock.MockPaymentResponse;
 import com.survila.subscriptiondemo.dto.mock.MockPreapprovalResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -27,6 +28,20 @@ public class MockPaymentClient {
                 .body(request)
                 .retrieve()
                 .body(MockPreapprovalResponse.class);
+    }
+
+    public MockPreapprovalResponse getPreapproval(String id) {
+        return restClient.get()
+                .uri("/preapproval/{id}", id)
+                .retrieve()
+                .body(MockPreapprovalResponse.class);
+    }
+
+    public MockPaymentResponse getPayment(String id) {
+        return restClient.get()
+                .uri("/payment/{id}", id)
+                .retrieve()
+                .body(MockPaymentResponse.class);
     }
 
     public MockPayWithCardResponse payWithCard(String preapprovalId, MockPayWithCardRequest request) {
