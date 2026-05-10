@@ -1,4 +1,5 @@
 const endpoints = {
+    info: "/api/demo/info",
     state: "/api/demo/state",
     plans: "/api/plans",
     subscriptions: "/api/demo/subscriptions",
@@ -21,6 +22,7 @@ const elements = {
     resetButton: document.querySelector("#resetButton"),
     messageBox: document.querySelector("#messageBox"),
 
+    integrationGrid: document.querySelector("#integrationGrid"),
     stateGrid: document.querySelector("#stateGrid"),
     plansGrid: document.querySelector("#plansGrid"),
 
@@ -157,12 +159,14 @@ async function loadDashboard(options = {}) {
 
     try {
         const [
+            info,
             state,
             plans,
             subscriptions,
             payments,
             events,
         ] = await Promise.all([
+            requestJson(endpoints.info),
             requestJson(endpoints.state),
             requestJson(endpoints.plans),
             requestJson(endpoints.subscriptions),
@@ -174,6 +178,7 @@ async function loadDashboard(options = {}) {
         const safeSubscriptions = subscriptions ?? [];
 
         renderState(state);
+        renderIntegrationInfo(info);
         renderPlans(safePlans);
         renderActionPlanSelect(safePlans);
         renderActionSubscriptionSelects(safeSubscriptions);
@@ -210,6 +215,26 @@ function renderState(state) {
     elements.stateGrid.innerHTML = items
         .map(([label, value]) => `
             <article class="metric">
+                <span>${escapeHtml(label)}</span>
+                <strong>${escapeHtml(value)}</strong>
+            </article>
+        `)
+        .join("");
+}
+
+function renderIntegrationInfo(info) {
+    const items = [
+        ["App", info?.name ?? "-"],
+        ["Mock Payment Base URL", info?.mock_payment_base_url ?? "-"],
+        ["Public Base URL", info?.public_base_url ?? "-"],
+        ["Webhook Base URL", info?.webhook_base_url ?? "-"],
+        ["Webhook Path", info?.webhook_path ?? "-"],
+        ["Webhook URL", info?.webhook_url ?? "-"],
+    ];
+
+    elements.integrationGrid.innerHTML = items
+        .map(([label, value]) => `
+            <article class="integration-item">
                 <span>${escapeHtml(label)}</span>
                 <strong>${escapeHtml(value)}</strong>
             </article>
