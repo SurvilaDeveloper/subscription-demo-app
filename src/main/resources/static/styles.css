@@ -401,3 +401,37 @@ td {
         grid-template-columns: 1fr;
     }
 }
+
+.actions-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    padding: 20px;
+}
+
+.action-card {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+    padding: 18px;
+    border-radius: 20px;
+    background: rgba(30, 41, 59, 0.85);
+    border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.action-card p {
+    margin-bottom: 0;
+    min-height: 48px;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+@media (max-width: 1100px) {
+    .actions-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .action-card p {
+        min-height: 0;
+    }
+}

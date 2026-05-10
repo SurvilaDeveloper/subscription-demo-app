@@ -5,6 +5,15 @@ const endpoints = {
     payments: "/api/demo/payments",
     events: "/api/demo/events",
     startSubscription: "/api/subscriptions/start",
+
+    simulateRecurringCharge: (subscriptionId) =>
+        `/api/subscriptions/${encodeURIComponent(subscriptionId)}/simulate-recurring-charge`,
+
+    changePlan: (subscriptionId) =>
+        `/api/subscriptions/${encodeURIComponent(subscriptionId)}/change-plan`,
+
+    cancelSubscription: (subscriptionId) =>
+        `/api/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`,
 };
 
 const elements = {
@@ -28,6 +37,17 @@ const elements = {
     planSelect: document.querySelector("#planSelect"),
     payerEmailInput: document.querySelector("#payerEmailInput"),
     cardNumberInput: document.querySelector("#cardNumberInput"),
+
+    recurringChargeForm: document.querySelector("#recurringChargeForm"),
+    recurringSubscriptionSelect: document.querySelector("#recurringSubscriptionSelect"),
+    recurringCardNumberInput: document.querySelector("#recurringCardNumberInput"),
+
+    changePlanForm: document.querySelector("#changePlanForm"),
+    changePlanSubscriptionSelect: document.querySelector("#changePlanSubscriptionSelect"),
+    changePlanPlanSelect: document.querySelector("#changePlanPlanSelect"),
+
+    cancelSubscriptionForm: document.querySelector("#cancelSubscriptionForm"),
+    cancelSubscriptionSelect: document.querySelector("#cancelSubscriptionSelect"),
 };
 
 function escapeHtml(value) {
@@ -150,9 +170,14 @@ async function loadDashboard(options = {}) {
             requestJson(endpoints.events),
         ]);
 
+        const safePlans = plans ?? [];
+        const safeSubscriptions = subscriptions ?? [];
+
         renderState(state);
-        renderPlans(plans ?? []);
-        renderSubscriptions(subscriptions ?? []);
+        renderPlans(safePlans);
+        renderActionPlanSelect(safePlans);
+        renderActionSubscriptionSelects(safeSubscriptions);
+        renderSubscriptions(safeSubscriptions);
         renderPayments(payments ?? []);
         renderEvents(events ?? []);
 
@@ -318,6 +343,104 @@ async function startSubscription(event) {
     }
 }
 
+async function simulateRecurringCharge(event) {
+    event.preventDefault();
+
+    const subscriptionId = elements.recurringSubscriptionSelect.value;
+
+    if (!subscriptionId) {
+        showMessage("Primero tenés que seleccionar una suscripción.", "error");
+        return;
+    }
+
+    try {
+        const response = await requestJson(endpoints.simulateRecurringCharge(subscriptionId), {
+            method: "POST",
+            body: JSON.stringify({
+                card_number: elements.recurringCardNumberInput.value,
+            }),
+        });
+
+        showMessage(
+            `Cobro recurrente generado. Suscripción: ${response.subscription.status}. Pago: ${response.payment.status}.`
+        );
+
+        await loadDashboard({ silent: true });
+    } catch (error) {
+        console.error(error);
+        showMessage(`No se pudo simular el cobro recurrente: ${error.message}`, "error");
+    }
+}
+
+async function changeSubscriptionPlan(event) {
+    event.preventDefault();
+
+    const subscriptionId = elements.changePlanSubscriptionSelect.value;
+    const planId = elements.changePlanPlanSelect.value;
+
+    if (!subscriptionId) {
+        showMessage("Primero tenés que seleccionar una suscripción.", "error");
+        return;
+    }
+
+    if (!planId) {
+        showMessage("Primero tenés que seleccionar un plan.", "error");
+        return;
+    }
+
+    try {
+        const response = await requestJson(endpoints.changePlan(subscriptionId), {
+            method: "POST",
+            body: JSON.stringify({
+                plan_id: planId,
+            }),
+        });
+
+        showMessage(
+            `Plan cambiado. Suscripción ${response.subscription.id}: ${response.subscription.planName}.`
+        );
+
+        await loadDashboard({ silent: true });
+    } catch (error) {
+        console.error(error);
+        showMessage(`No se pudo cambiar el plan: ${error.message}`, "error");
+    }
+}
+
+async function cancelSubscription(event) {
+    event.preventDefault();
+
+    const subscriptionId = elements.cancelSubscriptionSelect.value;
+
+    if (!subscriptionId) {
+        showMessage("Primero tenés que seleccionar una suscripción.", "error");
+        return;
+    }
+
+    const confirmed = window.confirm(
+        `¿Seguro que querés cancelar la suscripción ${subscriptionId}?`
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        const response = await requestJson(endpoints.cancelSubscription(subscriptionId), {
+            method: "POST",
+        });
+
+        showMessage(
+            `Suscripción cancelada: ${response.subscription.id} · ${response.subscription.status}.`
+        );
+
+        await loadDashboard({ silent: true });
+    } catch (error) {
+        console.error(error);
+        showMessage(`No se pudo cancelar la suscripción: ${error.message}`, "error");
+    }
+}
+
 async function resetState() {
     const confirmed = window.confirm(
         "¿Seguro que querés resetear el estado interno de StreamBox Demo?"
@@ -367,7 +490,65 @@ function renderPlanSelect(plans) {
     }
 }
 
+function renderActionPlanSelect(plans) {
+    const previousValue = elements.changePlanPlanSelect.value;
+
+    if (!plans.length) {
+        elements.changePlanPlanSelect.innerHTML = `<option value="">Sin planes disponibles</option>`;
+        return;
+    }
+
+    elements.changePlanPlanSelect.innerHTML = plans
+        .map((plan) => `
+            <option value="${escapeHtml(plan.id)}">
+                ${escapeHtml(plan.name)} · ${escapeHtml(formatMoney(plan.amount, plan.currency))} / mes
+            </option>
+        `)
+        .join("");
+
+    const exists = plans.some((plan) => plan.id === previousValue);
+
+    if (exists) {
+        elements.changePlanPlanSelect.value = previousValue;
+    }
+}
+
+function renderActionSubscriptionSelects(subscriptions) {
+    const selects = [
+        elements.recurringSubscriptionSelect,
+        elements.changePlanSubscriptionSelect,
+        elements.cancelSubscriptionSelect,
+    ];
+
+    for (const select of selects) {
+        const previousValue = select.value;
+
+        if (!subscriptions.length) {
+            select.innerHTML = `<option value="">Sin suscripciones</option>`;
+            continue;
+        }
+
+        select.innerHTML = subscriptions
+            .map((subscription) => `
+                <option value="${escapeHtml(subscription.id)}">
+                    ${escapeHtml(subscription.id)} · ${escapeHtml(subscription.planName)} · ${escapeHtml(subscription.status)}
+                </option>
+            `)
+            .join("");
+
+        const exists = subscriptions.some((subscription) => subscription.id === previousValue);
+
+        if (exists) {
+            select.value = previousValue;
+        }
+    }
+}
+
 elements.subscriptionForm.addEventListener("submit", startSubscription);
+elements.recurringChargeForm.addEventListener("submit", simulateRecurringCharge);
+elements.changePlanForm.addEventListener("submit", changeSubscriptionPlan);
+elements.cancelSubscriptionForm.addEventListener("submit", cancelSubscription);
+
 elements.refreshButton.addEventListener("click", () => loadDashboard());
 elements.resetButton.addEventListener("click", resetState);
 

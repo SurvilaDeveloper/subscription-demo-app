@@ -1,11 +1,21 @@
+# syntax=docker/dockerfile:1.7
+
 FROM eclipse-temurin:17-jdk-jammy AS build
 
 WORKDIR /app
 
-COPY . .
+COPY .mvn .mvn
+COPY mvnw pom.xml ./
 
 RUN chmod +x ./mvnw
-RUN ./mvnw clean package -DskipTests
+
+RUN --mount=type=cache,target=/root/.m2 \
+    ./mvnw -B -DskipTests dependency:go-offline
+
+COPY src src
+
+RUN --mount=type=cache,target=/root/.m2 \
+    ./mvnw -B -DskipTests clean package
 
 FROM eclipse-temurin:17-jre-jammy
 

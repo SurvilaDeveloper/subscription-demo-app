@@ -86,6 +86,90 @@
         <section class="card card-full">
             <div class="card-header">
                 <div>
+                    <h2>Acciones sobre una suscripción</h2>
+                    <p>Simulá operaciones posteriores al alta inicial usando Mock Payment Service.</p>
+                </div>
+            </div>
+
+            <div class="actions-grid">
+                <form id="recurringChargeForm" class="action-card">
+                    <h3>Simular cobro recurrente</h3>
+                    <p>
+                        Genera un nuevo pago sobre una suscripción existente.
+                    </p>
+
+                    <label class="field">
+                        <span>Suscripción</span>
+                        <select id="recurringSubscriptionSelect" required>
+                            <option value="">Sin suscripciones</option>
+                        </select>
+                    </label>
+
+                    <label class="field">
+                        <span>Tarjeta ficticia</span>
+                        <select id="recurringCardNumberInput" required>
+                            <option value="4111111111111111">4111111111111111 · Pago aprobado</option>
+                            <option value="4000000000000002">4000000000000002 · Sin fondos</option>
+                            <option value="4000000000009995">4000000000009995 · Número inválido</option>
+                            <option value="4000000000000069">4000000000000069 · Tarjeta vencida</option>
+                            <option value="4000000000000341">4000000000000341 · Pago pendiente</option>
+                            <option value="4000000000000259">4000000000000259 · Error genérico</option>
+                        </select>
+                    </label>
+
+                    <button class="button button-primary" type="submit">
+                        Simular cobro
+                    </button>
+                </form>
+
+                <form id="changePlanForm" class="action-card">
+                    <h3>Cambiar plan</h3>
+                    <p>
+                        Cambia el plan asociado a una suscripción existente.
+                    </p>
+
+                    <label class="field">
+                        <span>Suscripción</span>
+                        <select id="changePlanSubscriptionSelect" required>
+                            <option value="">Sin suscripciones</option>
+                        </select>
+                    </label>
+
+                    <label class="field">
+                        <span>Nuevo plan</span>
+                        <select id="changePlanPlanSelect" required>
+                            <option value="">Cargando planes...</option>
+                        </select>
+                    </label>
+
+                    <button class="button button-primary" type="submit">
+                        Cambiar plan
+                    </button>
+                </form>
+
+                <form id="cancelSubscriptionForm" class="action-card">
+                    <h3>Cancelar suscripción</h3>
+                    <p>
+                        Cancela una suscripción existente y envía webhook al mock.
+                    </p>
+
+                    <label class="field">
+                        <span>Suscripción</span>
+                        <select id="cancelSubscriptionSelect" required>
+                            <option value="">Sin suscripciones</option>
+                        </select>
+                    </label>
+
+                    <button class="button button-danger" type="submit">
+                        Cancelar suscripción
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <section class="card card-full">
+            <div class="card-header">
+                <div>
                     <h2>Planes disponibles</h2>
                     <p>Planes hardcodeados que luego se enviarán a Mock Payment Service.</p>
                 </div>
