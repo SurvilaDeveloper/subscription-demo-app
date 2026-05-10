@@ -9,10 +9,10 @@ public class DemoSubscription implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private final String id;
-    private final String planId;
-    private final String planName;
-    private final BigDecimal amount;
-    private final String currency;
+    private String planId;
+    private String planName;
+    private BigDecimal amount;
+    private String currency;
     private final String payerEmail;
 
     private String providerSubscriptionId;
@@ -92,5 +92,13 @@ public class DemoSubscription implements Serializable {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public void replacePlan(Plan plan) {
+        this.planId = plan.id();
+        this.planName = plan.name();
+        this.amount = plan.amount();
+        this.currency = plan.currency();
+        this.updatedAt = Instant.now();
     }
 }

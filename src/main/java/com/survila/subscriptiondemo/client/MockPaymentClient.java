@@ -1,10 +1,13 @@
 package com.survila.subscriptiondemo.client;
 
+import com.survila.subscriptiondemo.dto.mock.MockChangePlanRequest;
 import com.survila.subscriptiondemo.dto.mock.MockCreatePreapprovalRequest;
 import com.survila.subscriptiondemo.dto.mock.MockPayWithCardRequest;
 import com.survila.subscriptiondemo.dto.mock.MockPayWithCardResponse;
 import com.survila.subscriptiondemo.dto.mock.MockPaymentResponse;
 import com.survila.subscriptiondemo.dto.mock.MockPreapprovalResponse;
+import com.survila.subscriptiondemo.dto.mock.MockSimulateRecurringChargeRequest;
+import com.survila.subscriptiondemo.dto.mock.MockSubscriptionActionRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -50,5 +53,32 @@ public class MockPaymentClient {
                 .body(request)
                 .retrieve()
                 .body(MockPayWithCardResponse.class);
+    }
+
+    public MockPayWithCardResponse simulateRecurringCharge(
+            String preapprovalId,
+            MockSimulateRecurringChargeRequest request
+    ) {
+        return restClient.post()
+                .uri("/mock/preapproval/{id}/simulate-recurring-charge", preapprovalId)
+                .body(request)
+                .retrieve()
+                .body(MockPayWithCardResponse.class);
+    }
+
+    public void changePlan(String preapprovalId, MockChangePlanRequest request) {
+        restClient.post()
+                .uri("/mock/preapproval/{id}/change-plan", preapprovalId)
+                .body(request)
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    public void cancelPreapproval(String preapprovalId, MockSubscriptionActionRequest request) {
+        restClient.post()
+                .uri("/mock/preapproval/{id}/cancel", preapprovalId)
+                .body(request)
+                .retrieve()
+                .toBodilessEntity();
     }
 }

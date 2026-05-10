@@ -1,13 +1,19 @@
 package com.survila.subscriptiondemo.service;
 
 import com.survila.subscriptiondemo.client.MockPaymentClient;
+import com.survila.subscriptiondemo.dto.ChangeSubscriptionPlanRequest;
+import com.survila.subscriptiondemo.dto.SimulateRecurringChargeRequest;
 import com.survila.subscriptiondemo.dto.StartSubscriptionRequest;
 import com.survila.subscriptiondemo.dto.StartSubscriptionResponse;
+import com.survila.subscriptiondemo.dto.SubscriptionActionResponse;
+import com.survila.subscriptiondemo.dto.mock.MockChangePlanRequest;
 import com.survila.subscriptiondemo.dto.mock.MockCreatePreapprovalRequest;
 import com.survila.subscriptiondemo.dto.mock.MockPayWithCardRequest;
 import com.survila.subscriptiondemo.dto.mock.MockPayWithCardResponse;
 import com.survila.subscriptiondemo.dto.mock.MockPaymentResponse;
 import com.survila.subscriptiondemo.dto.mock.MockPreapprovalResponse;
+import com.survila.subscriptiondemo.dto.mock.MockSimulateRecurringChargeRequest;
+import com.survila.subscriptiondemo.dto.mock.MockSubscriptionActionRequest;
 import com.survila.subscriptiondemo.dto.webhook.MockPaymentWebhookPayload;
 import com.survila.subscriptiondemo.exception.BadRequestException;
 import com.survila.subscriptiondemo.model.DemoPayment;
@@ -115,6 +121,140 @@ public class SubscriptionService {
                 payResponse.payment().id(),
                 payResponse.preapprovalStatus(),
                 payResponse.payment().status()
+        );
+    }
+
+    public SubscriptionActionResponse simulateRecurringCharge(
+            String subscriptionId,
+            SimulateRecurringChargeRequest request
+    ) {
+        DemoSubscription subscription = getSubscriptionOrThrow(subscriptionId);
+
+        ensureProviderSubscription(subscription);
+
+        MockPayWithCardResponse response = mockPaymentClient.simulateRecurringCharge(
+                subscription.getProviderSubscriptionId(),
+                new MockSimulateRecurringChargeRequest(
+                        request.cardNumber(),
+                        true
+                )
+        );
+
+        subscription.setStatus(mapPreapprovalStatus(response.preapprovalStatus()));
+        store.saveSubscription(subscription);
+
+        DemoPayment payment = savePaymentIfMissing(
+                subscription.getId(),
+                response.payment()
+        );
+
+        store.addEvent(
+                "RECURRING_CHARGE_SIMULATED",
+                "Recurring charge simulated for internal subscription %s. Provider payment %s has status %s."
+                        .formatted(subscription.getId(), response.payment().id(), response.payment().status())
+        );
+
+        store.addEvent(
+                "SUBSCRIPTION_STATUS_UPDATED",
+                "Internal subscription %s changed to %s after recurring charge."
+                        .formatted(subscription.getId(), subscription.getStatus())
+        );
+
+        return new SubscriptionActionResponse(
+                subscription,
+                payment,
+                subscription.getProviderSubscriptionId(),
+                response.payment().id(),
+                response.preapprovalStatus(),
+                response.payment().status()
+        );
+    }
+
+    public SubscriptionActionResponse changePlan(
+            String subscriptionId,
+            ChangeSubscriptionPlanRequest request
+    ) {
+        DemoSubscription subscription = getSubscriptionOrThrow(subscriptionId);
+
+        ensureProviderSubscription(subscription);
+
+        Plan newPlan = planCatalogService.findById(request.planId())
+                .orElseThrow(() -> new BadRequestException("Plan not found: " + request.planId()));
+
+        mockPaymentClient.changePlan(
+                subscription.getProviderSubscriptionId(),
+                new MockChangePlanRequest(
+                        newPlan.name(),
+                        new MockCreatePreapprovalRequest.AutoRecurringRequest(
+                                1,
+                                "months",
+                                newPlan.amount(),
+                                newPlan.currency()
+                        ),
+                        true
+                )
+        );
+
+        MockPreapprovalResponse providerPreapproval = mockPaymentClient.getPreapproval(
+                subscription.getProviderSubscriptionId()
+        );
+
+        subscription.replacePlan(newPlan);
+        subscription.setStatus(mapPreapprovalStatus(providerPreapproval.status()));
+        store.saveSubscription(subscription);
+
+        store.addEvent(
+                "PLAN_CHANGED",
+                "Internal subscription %s changed to plan %s."
+                        .formatted(subscription.getId(), newPlan.name())
+        );
+
+        store.addEvent(
+                "SUBSCRIPTION_STATUS_UPDATED",
+                "Internal subscription %s changed to %s after plan change."
+                        .formatted(subscription.getId(), subscription.getStatus())
+        );
+
+        return new SubscriptionActionResponse(
+                subscription,
+                null,
+                subscription.getProviderSubscriptionId(),
+                null,
+                providerPreapproval.status(),
+                null
+        );
+    }
+
+    public SubscriptionActionResponse cancelSubscription(String subscriptionId) {
+        DemoSubscription subscription = getSubscriptionOrThrow(subscriptionId);
+
+        ensureProviderSubscription(subscription);
+
+        mockPaymentClient.cancelPreapproval(
+                subscription.getProviderSubscriptionId(),
+                new MockSubscriptionActionRequest(true)
+        );
+
+        MockPreapprovalResponse providerPreapproval = mockPaymentClient.getPreapproval(
+                subscription.getProviderSubscriptionId()
+        );
+
+        subscription.setStatus(mapPreapprovalStatus(providerPreapproval.status()));
+        store.saveSubscription(subscription);
+
+        store.addEvent(
+                "SUBSCRIPTION_CANCELLED",
+                "Internal subscription %s was cancelled from StreamBox Demo."
+                        .formatted(subscription.getId())
+        );
+
+        return new SubscriptionActionResponse(
+                subscription,
+                null,
+                subscription.getProviderSubscriptionId(),
+                null,
+                providerPreapproval.status(),
+                null
         );
     }
 
@@ -243,6 +383,20 @@ public class SubscriptionService {
                 "123",
                 true
         );
+    }
+
+    private DemoSubscription getSubscriptionOrThrow(String subscriptionId) {
+        return store.findSubscriptionById(subscriptionId)
+                .orElseThrow(() -> new BadRequestException("Internal subscription not found: " + subscriptionId));
+    }
+
+    private void ensureProviderSubscription(DemoSubscription subscription) {
+        if (subscription.getProviderSubscriptionId() == null || subscription.getProviderSubscriptionId().isBlank()) {
+            throw new BadRequestException(
+                    "Internal subscription %s does not have provider subscription id."
+                            .formatted(subscription.getId())
+            );
+        }
     }
 
     private SubscriptionStatus mapPreapprovalStatus(String providerStatus) {
