@@ -18,6 +18,10 @@
         </div>
 
         <div class="hero-actions">
+            <button id="helpButton" class="button button-secondary" type="button">
+                Ayuda
+            </button>
+
             <button id="refreshButton" class="button button-primary" type="button">
                 Refrescar
             </button>
@@ -294,6 +298,29 @@
             </div>
         </section>
     </main>
+</div>
+
+<div id="helpModalBackdrop" class="modal-backdrop hidden">
+    <section class="help-modal" role="dialog" aria-modal="true" aria-labelledby="helpModalTitle">
+        <header class="help-modal-header">
+            <div>
+                <p class="eyebrow">Guía de uso</p>
+                <h2 id="helpModalTitle">Ayuda de StreamBox Demo</h2>
+                <p>
+                    Una guía rápida para entender cómo esta aplicación se integra con Mock Payment Service.
+                </p>
+            </div>
+
+            <button id="helpCloseButton" class="button button-secondary" type="button">
+                Cerrar
+            </button>
+        </header>
+
+        <div class="help-modal-body">
+            <nav id="helpNav" class="help-nav" aria-label="Secciones de ayuda"></nav>
+            <article id="helpContent" class="help-content"></article>
+        </div>
+    </section>
 </div>
 
 <script src="./app.js"></script>
