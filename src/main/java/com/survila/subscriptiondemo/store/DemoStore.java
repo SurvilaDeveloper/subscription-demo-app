@@ -2,6 +2,7 @@ package com.survila.subscriptiondemo.store;
 
 import com.survila.subscriptiondemo.model.DemoEvent;
 import com.survila.subscriptiondemo.model.DemoPayment;
+import com.survila.subscriptiondemo.model.DemoReceivedWebhook;
 import com.survila.subscriptiondemo.model.DemoSubscription;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -29,10 +30,12 @@ public class DemoStore {
     private final ConcurrentHashMap<String, DemoSubscription> subscriptions = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, DemoPayment> payments = new ConcurrentHashMap<>();
     private final List<DemoEvent> events = new ArrayList<>();
+    private final List<DemoReceivedWebhook> receivedWebhooks = new ArrayList<>();
 
     private final AtomicLong subscriptionSequence = new AtomicLong(1);
     private final AtomicLong paymentSequence = new AtomicLong(1);
     private final AtomicLong eventSequence = new AtomicLong(1);
+    private final AtomicLong receivedWebhookSequence = new AtomicLong(1);
 
     private final String storageType;
     private final Path stateFilePath;
@@ -57,6 +60,10 @@ public class DemoStore {
 
     public String nextEventId() {
         return "demo-event-" + eventSequence.getAndIncrement();
+    }
+
+    public String nextReceivedWebhookId() {
+        return "demo-webhook-" + receivedWebhookSequence.getAndIncrement();
     }
 
     public synchronized DemoSubscription saveSubscription(DemoSubscription subscription) {
@@ -121,6 +128,29 @@ public class DemoStore {
         return List.copyOf(events);
     }
 
+    public synchronized DemoReceivedWebhook saveReceivedWebhook(DemoReceivedWebhook webhook) {
+        for (int i = 0; i < receivedWebhooks.size(); i++) {
+            DemoReceivedWebhook current = receivedWebhooks.get(i);
+
+            if (current.getId().equals(webhook.getId())) {
+                receivedWebhooks.set(i, webhook);
+                persistIfNeeded();
+                return webhook;
+            }
+        }
+
+        receivedWebhooks.add(webhook);
+        persistIfNeeded();
+
+        return webhook;
+    }
+
+    public synchronized List<DemoReceivedWebhook> findAllReceivedWebhooks() {
+        return receivedWebhooks.stream()
+                .sorted(Comparator.comparing(DemoReceivedWebhook::getReceivedAt))
+                .toList();
+    }
+
     public int countSubscriptions() {
         return subscriptions.size();
     }
@@ -133,14 +163,20 @@ public class DemoStore {
         return events.size();
     }
 
+    public synchronized int countReceivedWebhooks() {
+        return receivedWebhooks.size();
+    }
+
     public synchronized void clearAll() {
         subscriptions.clear();
         payments.clear();
         events.clear();
+        receivedWebhooks.clear();
 
         subscriptionSequence.set(1);
         paymentSequence.set(1);
         eventSequence.set(1);
+        receivedWebhookSequence.set(1);
 
         persistIfNeeded();
     }
@@ -191,20 +227,39 @@ public class DemoStore {
             subscriptions.clear();
             payments.clear();
             events.clear();
+            receivedWebhooks.clear();
 
-            for (DemoSubscription subscription : snapshot.subscriptions()) {
+            List<DemoSubscription> snapshotSubscriptions = snapshot.subscriptions() == null
+                    ? List.of()
+                    : snapshot.subscriptions();
+
+            List<DemoPayment> snapshotPayments = snapshot.payments() == null
+                    ? List.of()
+                    : snapshot.payments();
+
+            List<DemoEvent> snapshotEvents = snapshot.events() == null
+                    ? List.of()
+                    : snapshot.events();
+
+            List<DemoReceivedWebhook> snapshotReceivedWebhooks = snapshot.receivedWebhooks() == null
+                    ? List.of()
+                    : snapshot.receivedWebhooks();
+
+            for (DemoSubscription subscription : snapshotSubscriptions) {
                 subscriptions.put(subscription.getId(), subscription);
             }
 
-            for (DemoPayment payment : snapshot.payments()) {
+            for (DemoPayment payment : snapshotPayments) {
                 payments.put(payment.getId(), payment);
             }
 
-            events.addAll(snapshot.events());
+            events.addAll(snapshotEvents);
+            receivedWebhooks.addAll(snapshotReceivedWebhooks);
 
-            subscriptionSequence.set(snapshot.nextSubscriptionSequence());
-            paymentSequence.set(snapshot.nextPaymentSequence());
-            eventSequence.set(snapshot.nextEventSequence());
+            subscriptionSequence.set(Math.max(1, snapshot.nextSubscriptionSequence()));
+            paymentSequence.set(Math.max(1, snapshot.nextPaymentSequence()));
+            eventSequence.set(Math.max(1, snapshot.nextEventSequence()));
+            receivedWebhookSequence.set(Math.max(1, snapshot.nextReceivedWebhookSequence()));
         } catch (Exception ex) {
             throw new IllegalStateException(
                     "Could not load demo state file: %s. Delete the file if it is corrupted or incompatible."
@@ -230,9 +285,11 @@ public class DemoStore {
                     findAllSubscriptions(),
                     findAllPayments(),
                     findAllEvents(),
+                    findAllReceivedWebhooks(),
                     subscriptionSequence.get(),
                     paymentSequence.get(),
-                    eventSequence.get()
+                    eventSequence.get(),
+                    receivedWebhookSequence.get()
             );
 
             try (
@@ -253,9 +310,11 @@ public class DemoStore {
             List<DemoSubscription> subscriptions,
             List<DemoPayment> payments,
             List<DemoEvent> events,
+            List<DemoReceivedWebhook> receivedWebhooks,
             long nextSubscriptionSequence,
             long nextPaymentSequence,
-            long nextEventSequence
+            long nextEventSequence,
+            long nextReceivedWebhookSequence
     ) implements Serializable {
 
         private static final long serialVersionUID = 1L;

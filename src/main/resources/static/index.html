@@ -245,6 +245,34 @@
         <section class="card card-full">
             <div class="card-header">
                 <div>
+                    <h2>Webhooks recibidos por StreamBox</h2>
+                    <p>Webhooks que llegaron a la aplicación principal, con firma y estado de procesamiento.</p>
+                </div>
+                <span id="receivedWebhooksCount" class="pill">0</span>
+            </div>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>ID interno</th>
+                        <th>Request ID</th>
+                        <th>Evento</th>
+                        <th>Data ID</th>
+                        <th>Firma válida</th>
+                        <th>Procesado</th>
+                        <th>Error</th>
+                        <th>Recibido</th>
+                    </tr>
+                    </thead>
+                    <tbody id="receivedWebhooksTable"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card card-full">
+            <div class="card-header">
+                <div>
                     <h2>Eventos internos</h2>
                     <p>Log educativo del flujo de la aplicación principal.</p>
                 </div>

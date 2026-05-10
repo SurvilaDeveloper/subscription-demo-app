@@ -5,6 +5,7 @@ const endpoints = {
     subscriptions: "/api/demo/subscriptions",
     payments: "/api/demo/payments",
     events: "/api/demo/events",
+    webhooks: "/api/demo/webhooks",
     startSubscription: "/api/subscriptions/start",
 
     simulateRecurringCharge: (subscriptionId) =>
@@ -50,6 +51,9 @@ const elements = {
 
     cancelSubscriptionForm: document.querySelector("#cancelSubscriptionForm"),
     cancelSubscriptionSelect: document.querySelector("#cancelSubscriptionSelect"),
+
+    receivedWebhooksCount: document.querySelector("#receivedWebhooksCount"),
+    receivedWebhooksTable: document.querySelector("#receivedWebhooksTable"),
 };
 
 function escapeHtml(value) {
@@ -165,6 +169,7 @@ async function loadDashboard(options = {}) {
             subscriptions,
             payments,
             events,
+            webhooks,
         ] = await Promise.all([
             requestJson(endpoints.info),
             requestJson(endpoints.state),
@@ -172,6 +177,7 @@ async function loadDashboard(options = {}) {
             requestJson(endpoints.subscriptions),
             requestJson(endpoints.payments),
             requestJson(endpoints.events),
+            requestJson(endpoints.webhooks),
         ]);
 
         const safePlans = plans ?? [];
@@ -184,6 +190,7 @@ async function loadDashboard(options = {}) {
         renderActionSubscriptionSelects(safeSubscriptions);
         renderSubscriptions(safeSubscriptions);
         renderPayments(payments ?? []);
+        renderReceivedWebhooks(webhooks ?? []);
         renderEvents(events ?? []);
 
         if (!options.silent) {
@@ -309,6 +316,48 @@ function renderPayments(payments) {
                 <td>${escapeHtml(formatDate(payment.createdAt))}</td>
             </tr>
         `)
+        .join("");
+}
+
+function renderReceivedWebhooks(webhooks) {
+    elements.receivedWebhooksCount.textContent = webhooks.length;
+
+    if (!webhooks.length) {
+        elements.receivedWebhooksTable.innerHTML = tableEmptyRow(8, "Todavía no hay webhooks recibidos por StreamBox.");
+        return;
+    }
+
+    elements.receivedWebhooksTable.innerHTML = webhooks
+        .slice()
+        .reverse()
+        .map((webhook) => {
+            const eventLabel = webhook.action ?? "-";
+            const eventType = webhook.type ?? "-";
+
+            return `
+                <tr>
+                    <td class="mono">${escapeHtml(webhook.id)}</td>
+                    <td class="mono">${escapeHtml(webhook.requestId ?? "-")}</td>
+                    <td>
+                        <div class="webhook-event">
+                            <strong>${escapeHtml(eventLabel)}</strong>
+                            <span>${escapeHtml(eventType)}</span>
+                        </div>
+                    </td>
+                    <td class="mono">${escapeHtml(webhook.dataId ?? "-")}</td>
+                    <td>${badge(String(webhook.validSignature))}</td>
+                    <td>${badge(String(webhook.processed))}</td>
+                    <td>
+                        ${
+                webhook.error
+                    ? `<span class="webhook-error">${escapeHtml(webhook.error)}</span>`
+                    : escapeHtml("-")
+            }
+                    </td>
+                    <td>${escapeHtml(formatDate(webhook.receivedAt))}</td>
+                </tr>
+            `;
+        })
         .join("");
 }
 

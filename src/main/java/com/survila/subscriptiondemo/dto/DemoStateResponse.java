@@ -12,6 +12,9 @@ public record DemoStateResponse(
         @JsonProperty("events_count")
         int eventsCount,
 
+        @JsonProperty("received_webhooks_count")
+        int receivedWebhooksCount,
+
         @JsonProperty("storage_type")
         String storageType,
 

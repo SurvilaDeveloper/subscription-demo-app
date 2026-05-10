@@ -474,3 +474,23 @@ td {
         grid-template-columns: 1fr;
     }
 }
+
+.webhook-event {
+    display: grid;
+    gap: 4px;
+}
+
+.webhook-event strong {
+    color: var(--text);
+}
+
+.webhook-event span {
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+.webhook-error {
+    color: #fecaca;
+    max-width: 420px;
+    overflow-wrap: anywhere;
+}

@@ -31,6 +31,7 @@ public class DemoStateController {
                 store.countSubscriptions(),
                 store.countPayments(),
                 store.countEvents(),
+                store.countReceivedWebhooks(),
                 store.getStorageType(),
                 store.getStateFilePath()
         );

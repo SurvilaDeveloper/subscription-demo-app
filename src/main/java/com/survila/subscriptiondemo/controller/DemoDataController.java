@@ -2,6 +2,7 @@ package com.survila.subscriptiondemo.controller;
 
 import com.survila.subscriptiondemo.model.DemoEvent;
 import com.survila.subscriptiondemo.model.DemoPayment;
+import com.survila.subscriptiondemo.model.DemoReceivedWebhook;
 import com.survila.subscriptiondemo.model.DemoSubscription;
 import com.survila.subscriptiondemo.store.DemoStore;
 import org.springframework.web.bind.annotation.*;
@@ -31,5 +32,10 @@ public class DemoDataController {
     @GetMapping("/events")
     public List<DemoEvent> getEvents() {
         return store.findAllEvents();
+    }
+
+    @GetMapping("/webhooks")
+    public List<DemoReceivedWebhook> getReceivedWebhooks() {
+        return store.findAllReceivedWebhooks();
     }
 }
