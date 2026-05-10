@@ -28,17 +28,20 @@ public class SubscriptionService {
     private final PlanCatalogService planCatalogService;
     private final MockPaymentClient mockPaymentClient;
     private final String publicBaseUrl;
+    private final String webhookBaseUrl;
 
     public SubscriptionService(
             DemoStore store,
             PlanCatalogService planCatalogService,
             MockPaymentClient mockPaymentClient,
-            @Value("${demo-app.public-base-url:http://localhost:8080}") String publicBaseUrl
+            @Value("${demo-app.public-base-url:http://localhost:8080}") String publicBaseUrl,
+            @Value("${demo-app.webhook-base-url:http://localhost:8080}") String webhookBaseUrl
     ) {
         this.store = store;
         this.planCatalogService = planCatalogService;
         this.mockPaymentClient = mockPaymentClient;
         this.publicBaseUrl = publicBaseUrl;
+        this.webhookBaseUrl = webhookBaseUrl;
     }
 
     public StartSubscriptionResponse startSubscription(StartSubscriptionRequest request) {
@@ -227,7 +230,7 @@ public class SubscriptionService {
                         subscription.getCurrency()
                 ),
                 publicBaseUrl,
-                publicBaseUrl + "/api/webhooks/mock-payment"
+                webhookBaseUrl + "/api/webhooks/mock-payment"
         );
     }
 

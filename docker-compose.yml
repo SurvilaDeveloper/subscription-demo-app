@@ -1,0 +1,23 @@
+services:
+  subscription-demo-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: subscription-demo-app
+    ports:
+      - "8080:8080"
+    environment:
+      MOCK_PAYMENT_BASE_URL: http://mock-payment-service:9090
+      MOCK_PAYMENT_WEBHOOK_SECRET: dev-secret
+      DEMO_APP_PUBLIC_BASE_URL: http://localhost:8080
+      DEMO_APP_WEBHOOK_BASE_URL: http://subscription-demo-app:8080
+      DEMO_APP_STORAGE_TYPE: file
+      DEMO_APP_STORAGE_FILE_PATH: /app/data/subscription-demo-state.bin
+    volumes:
+      - ./data:/app/data
+    networks:
+      - payment-demo-network
+
+networks:
+  payment-demo-network:
+    external: true

@@ -7,6 +7,7 @@ server:
 
 demo-app:
   public-base-url: ${DEMO_APP_PUBLIC_BASE_URL:http://localhost:8080}
+  webhook-base-url: ${DEMO_APP_WEBHOOK_BASE_URL:http://localhost:8080}
   mock-payment:
     base-url: ${MOCK_PAYMENT_BASE_URL:http://localhost:9090}
     webhook-secret: ${MOCK_PAYMENT_WEBHOOK_SECRET:dev-secret}
