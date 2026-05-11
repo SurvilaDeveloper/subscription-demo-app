@@ -77,7 +77,11 @@ Actualiza su estado interno
 - Persistencia en memoria o archivo local.
 - Dockerfile y Docker Compose.
 - Puerto publicado configurable con `DEMO_APP_HOST_PORT`.
+- Variables Docker configurables desde `.env` o desde el comando `docker compose up`.
+- Red Docker externa compartida para integrarse con `mock-payment-service` en contenedores separados.
 - Ayuda integrada en la UI.
+- Documentación sobre qué partes del código sirven como referencia para un proyecto real.
+- Licencia MIT.
 
 ---
 
@@ -157,6 +161,12 @@ La app quedará disponible en:
 http://localhost:8080/
 ```
 
+Por defecto, el `docker-compose.yml` usa persistencia en archivo mediante volumen local:
+
+```txt
+./data:/app/data
+```
+
 ---
 
 ## Ejecutar en otro puerto publicado
@@ -189,6 +199,23 @@ http://subscription-demo-app:8080/api/webhooks/mock-payment
 
 ---
 
+## Variables configurables desde Docker Compose
+
+El contenedor puede configurarse con variables de entorno.
+
+Ejemplo:
+
+```bash
+DEMO_APP_HOST_PORT=8085 \
+MOCK_PAYMENT_WEBHOOK_SECRET=otro-secret \
+DEMO_APP_STORAGE_TYPE=memory \
+docker compose up --build
+```
+
+También se puede usar un archivo `.env`.
+
+---
+
 # Docker y red compartida
 
 Cuando `subscription-demo-app` y `mock-payment-service` corren en contenedores separados, deben estar en la misma red Docker externa.
@@ -205,12 +232,14 @@ services:
     ports:
       - "${DEMO_APP_HOST_PORT:-8080}:8080"
     environment:
-      MOCK_PAYMENT_BASE_URL: http://mock-payment-service:9090
-      MOCK_PAYMENT_WEBHOOK_SECRET: dev-secret
-      DEMO_APP_PUBLIC_BASE_URL: http://localhost:${DEMO_APP_HOST_PORT:-8080}
-      DEMO_APP_WEBHOOK_BASE_URL: http://subscription-demo-app:8080
-      DEMO_APP_STORAGE_TYPE: file
-      DEMO_APP_STORAGE_FILE_PATH: /app/data/subscription-demo-state.bin
+      MOCK_PAYMENT_BASE_URL: "${MOCK_PAYMENT_BASE_URL:-http://mock-payment-service:9090}"
+      MOCK_PAYMENT_WEBHOOK_SECRET: "${MOCK_PAYMENT_WEBHOOK_SECRET:-dev-secret}"
+
+      DEMO_APP_PUBLIC_BASE_URL: "${DEMO_APP_PUBLIC_BASE_URL:-http://localhost:${DEMO_APP_HOST_PORT:-8080}}"
+      DEMO_APP_WEBHOOK_BASE_URL: "${DEMO_APP_WEBHOOK_BASE_URL:-http://subscription-demo-app:8080}"
+
+      DEMO_APP_STORAGE_TYPE: "${DEMO_APP_STORAGE_TYPE:-file}"
+      DEMO_APP_STORAGE_FILE_PATH: "${DEMO_APP_STORAGE_FILE_PATH:-/app/data/subscription-demo-state.bin}"
     volumes:
       - ./data:/app/data
     networks:
@@ -226,6 +255,7 @@ Regla práctica:
 ```txt
 Navegador → contenedor:
   http://localhost:8080
+  http://localhost:8085
   http://localhost:9090
 
 Contenedor → contenedor:
@@ -243,6 +273,18 @@ StreamBox Demo container → Mock Payment container:
 http://mock-payment-service:9090
 
 Mock Payment container → StreamBox Demo container:
+http://subscription-demo-app:8080/api/webhooks/mock-payment
+```
+
+Aunque StreamBox se abra desde el navegador en:
+
+```txt
+http://localhost:8085/
+```
+
+el webhook entre contenedores debería seguir apuntando a:
+
+```txt
 http://subscription-demo-app:8080/api/webhooks/mock-payment
 ```
 
@@ -298,15 +340,28 @@ demo-app:
 Se puede crear un archivo `.env` en la raíz del proyecto:
 
 ```env
+# Puerto publicado en la máquina host.
+# Si se deja vacío, Docker Compose usa 8080.
 DEMO_APP_HOST_PORT=8085
 
-MOCK_PAYMENT_BASE_URL=http://mock-payment-service:9090
-MOCK_PAYMENT_WEBHOOK_SECRET=dev-secret
-
+# URL que usa StreamBox desde el navegador.
 DEMO_APP_PUBLIC_BASE_URL=http://localhost:8085
+
+# URL que usa Mock Payment Service para enviar webhooks a StreamBox.
+# En Docker, debe usar el nombre del contenedor de StreamBox y el puerto interno.
 DEMO_APP_WEBHOOK_BASE_URL=http://subscription-demo-app:8080
 
+# URL que usa StreamBox para llamar a Mock Payment Service.
+# En Docker, debe usar el nombre del contenedor de Mock Payment Service.
+MOCK_PAYMENT_BASE_URL=http://mock-payment-service:9090
+
+# Debe coincidir con el secret configurado en mock-payment-service.
+MOCK_PAYMENT_WEBHOOK_SECRET=dev-secret
+
+# Persistencia: memory o file.
 DEMO_APP_STORAGE_TYPE=file
+
+# Ruta interna del archivo de estado cuando se usa Docker.
 DEMO_APP_STORAGE_FILE_PATH=/app/data/subscription-demo-state.bin
 ```
 
@@ -329,6 +384,48 @@ La app soporta dos modos de almacenamiento:
 
 ---
 
+## Modo memory
+
+```yaml
+demo-app:
+  storage:
+    type: memory
+```
+
+Con Docker Compose:
+
+```bash
+DEMO_APP_STORAGE_TYPE=memory docker compose up --build
+```
+
+Ideal para pruebas rápidas.
+
+---
+
+## Modo file
+
+```yaml
+demo-app:
+  storage:
+    type: file
+    file-path: ./data/subscription-demo-state.bin
+```
+
+En Docker Compose se usa:
+
+```yaml
+environment:
+  DEMO_APP_STORAGE_TYPE: file
+  DEMO_APP_STORAGE_FILE_PATH: /app/data/subscription-demo-state.bin
+
+volumes:
+  - ./data:/app/data
+```
+
+Ideal para conservar datos entre reinicios.
+
+---
+
 # Health check
 
 Endpoint:
@@ -337,10 +434,16 @@ Endpoint:
 GET /health
 ```
 
-Ejemplo:
+Ejemplo con puerto por defecto:
 
 ```bash
 curl http://localhost:8080/health
+```
+
+Ejemplo con puerto publicado alternativo:
+
+```bash
+curl http://localhost:8085/health
 ```
 
 Respuesta esperada:
@@ -398,10 +501,16 @@ Endpoint:
 GET /api/plans
 ```
 
-Ejemplo:
+Ejemplo con puerto por defecto:
 
 ```bash
 curl http://localhost:8080/api/plans
+```
+
+Ejemplo con puerto publicado alternativo:
+
+```bash
+curl http://localhost:8085/api/plans
 ```
 
 ---
@@ -410,8 +519,16 @@ curl http://localhost:8080/api/plans
 
 ## 1. Resetear estado
 
+Con puerto por defecto:
+
 ```bash
 curl -X DELETE http://localhost:8080/api/demo/state
+```
+
+Con puerto publicado alternativo:
+
+```bash
+curl -X DELETE http://localhost:8085/api/demo/state
 ```
 
 ---
@@ -424,10 +541,22 @@ Endpoint:
 POST /api/subscriptions/start
 ```
 
-Ejemplo:
+Ejemplo con puerto por defecto:
 
 ```bash
 curl -X POST http://localhost:8080/api/subscriptions/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "plan_id": "basic",
+    "payer_email": "cliente@test.com",
+    "card_number": "4111111111111111"
+  }'
+```
+
+Ejemplo con puerto publicado alternativo:
+
+```bash
+curl -X POST http://localhost:8085/api/subscriptions/start \
   -H "Content-Type: application/json" \
   -d '{
     "plan_id": "basic",
@@ -502,6 +631,18 @@ curl -X POST http://localhost:8080/api/subscriptions/demo-subscription-1/simulat
   -d '{
     "card_number": "4000000000000002"
   }'
+```
+
+Si StreamBox está publicado en otro puerto, reemplazar:
+
+```txt
+http://localhost:8080
+```
+
+por:
+
+```txt
+http://localhost:8085
 ```
 
 ---
@@ -649,8 +790,16 @@ Significa que el webhook fue entregado a StreamBox, no al receptor interno del m
 
 ## Consultar estado general
 
+Con puerto por defecto:
+
 ```bash
 curl http://localhost:8080/api/demo/state
+```
+
+Con puerto publicado alternativo:
+
+```bash
+curl http://localhost:8085/api/demo/state
 ```
 
 Respuesta ejemplo:
@@ -695,18 +844,37 @@ Endpoint:
 GET /api/demo/info
 ```
 
-Ejemplo:
+Ejemplo con puerto por defecto:
 
 ```bash
 curl http://localhost:8080/api/demo/info
 ```
 
-Respuesta esperada en Docker:
+Ejemplo con puerto publicado alternativo:
+
+```bash
+curl http://localhost:8085/api/demo/info
+```
+
+Respuesta esperada en Docker con puerto por defecto:
 
 ```json
 {
   "name": "subscription-demo-app",
   "public_base_url": "http://localhost:8080",
+  "webhook_base_url": "http://subscription-demo-app:8080",
+  "mock_payment_base_url": "http://mock-payment-service:9090",
+  "webhook_path": "/api/webhooks/mock-payment",
+  "webhook_url": "http://subscription-demo-app:8080/api/webhooks/mock-payment"
+}
+```
+
+Respuesta esperada en Docker usando `DEMO_APP_HOST_PORT=8085` y `DEMO_APP_PUBLIC_BASE_URL=http://localhost:8085`:
+
+```json
+{
+  "name": "subscription-demo-app",
+  "public_base_url": "http://localhost:8085",
   "webhook_base_url": "http://subscription-demo-app:8080",
   "mock_payment_base_url": "http://mock-payment-service:9090",
   "webhook_path": "/api/webhooks/mock-payment",
@@ -736,6 +904,26 @@ Respuesta esperada en Docker:
 | `GET` | `/api/demo/webhooks` | Listar webhooks recibidos por StreamBox |
 | `POST` | `/api/webhooks/mock-payment` | Recibir webhooks desde Mock Payment Service |
 
+Los endpoints se consumen desde la máquina host usando el puerto publicado.
+
+Por defecto:
+
+```txt
+http://localhost:8080
+```
+
+Con puerto personalizado:
+
+```txt
+http://localhost:{DEMO_APP_HOST_PORT}
+```
+
+Desde otro contenedor en la misma red Docker:
+
+```txt
+http://subscription-demo-app:8080
+```
+
 ---
 
 # Prueba completa recomendada
@@ -748,6 +936,14 @@ Con `mock-payment-service` y `subscription-demo-app` corriendo en Docker:
 curl -X DELETE http://localhost:8080/api/demo/state
 ```
 
+Si StreamBox está publicado en otro puerto:
+
+```bash
+curl -X DELETE http://localhost:8085/api/demo/state
+```
+
+---
+
 ## 2. Crear suscripción aprobada
 
 ```bash
@@ -759,6 +955,20 @@ curl -X POST http://localhost:8080/api/subscriptions/start \
     "card_number": "4111111111111111"
   }'
 ```
+
+Si StreamBox está publicado en otro puerto:
+
+```bash
+curl -X POST http://localhost:8085/api/subscriptions/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "plan_id": "basic",
+    "payer_email": "cliente@test.com",
+    "card_number": "4111111111111111"
+  }'
+```
+
+---
 
 ## 3. Ver webhooks recibidos por StreamBox
 
@@ -773,6 +983,8 @@ validSignature = true
 processed = true
 action = payment.created
 ```
+
+---
 
 ## 4. Ver eventos internos
 
@@ -790,6 +1002,8 @@ WEBHOOK_RECEIVED
 WEBHOOK_PAYMENT_PROCESSED
 SUBSCRIPTION_UPDATED_FROM_WEBHOOK
 ```
+
+---
 
 ## 5. Ver en Mock Payment Studio
 
@@ -826,6 +1040,16 @@ Abrir:
 http://localhost:8085/
 ```
 
+Recordatorio:
+
+```txt
+Host/navegador:
+http://localhost:8085
+
+Otros contenedores:
+http://subscription-demo-app:8080
+```
+
 ---
 
 ## Mock Payment no puede enviar webhooks a StreamBox
@@ -856,13 +1080,49 @@ subscription-demo-app
 
 ## StreamBox no puede llamar a Mock Payment Service
 
-Revisar:
+Si StreamBox corre en Docker, revisar que use:
 
 ```txt
 MOCK_PAYMENT_BASE_URL=http://mock-payment-service:9090
 ```
 
-Desde el contenedor de StreamBox se debe poder resolver `mock-payment-service`.
+No debería usar:
+
+```txt
+http://localhost:9090
+```
+
+dentro del contenedor.
+
+Si StreamBox corre directamente en la máquina host y Mock Payment Service está publicado en otro puerto, por ejemplo `9095`, usar:
+
+```txt
+MOCK_PAYMENT_BASE_URL=http://localhost:9095
+```
+
+---
+
+## El secret de webhooks no coincide
+
+StreamBox valida los webhooks usando:
+
+```txt
+MOCK_PAYMENT_WEBHOOK_SECRET
+```
+
+Ese valor debe coincidir con el secret configurado en `mock-payment-service`.
+
+Ejemplo:
+
+```txt
+mock-payment-service:
+MOCK_PAYMENT_WEBHOOK_SECRET=dev-secret
+
+subscription-demo-app:
+MOCK_PAYMENT_WEBHOOK_SECRET=dev-secret
+```
+
+Si no coinciden, StreamBox puede registrar el webhook como firma inválida o rechazarlo.
 
 ---
 
@@ -907,6 +1167,38 @@ data/
 
 ---
 
+# Documentación adicional
+
+El proyecto incluye una documentación para entender qué partes del código pueden servir como referencia para una aplicación real:
+
+```txt
+docs/code-to-emulate-in-real-project.md
+```
+
+Esa guía explica qué partes conviene emular, por ejemplo:
+
+```txt
+cliente HTTP hacia el proveedor
+servicio de suscripciones o billing
+controlador de webhooks
+validador de firma
+modelos internos de suscripción y pago
+registro de webhooks recibidos
+mapeo de estados externos a internos
+```
+
+Y también qué partes son solamente de demostración:
+
+```txt
+DemoStore
+planes hardcodeados
+tarjetas ficticias
+UI estática educativa
+endpoints específicos de simulación
+```
+
+---
+
 # Roadmap posible
 
 Ideas para futuras mejoras:
@@ -929,7 +1221,7 @@ Modo multiusuario educativo
 
 # Licencia
 
-Este proyecto puede publicarse bajo licencia MIT.
+Este proyecto usa licencia MIT.
 
 Ver:
 
