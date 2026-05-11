@@ -10,40 +10,81 @@ This project follows a simple semantic versioning style:
 
 ---
 
-## 1.0.0 - Unreleased
+## 1.0.0 - Initial release
 
 ### Added
 
-- Initial StreamBox Demo application.
-- Spring Boot backend serving a static UI.
+- Initial stable release of Subscription Demo App.
+- StreamBox Demo UI served from Spring Boot.
+- Educational demo showing the application-side of a payment integration.
+- Integration with `mock-payment-service`.
 - Hardcoded subscription plans.
-- Integration with Mock Payment Service.
-- Initial subscription creation flow.
-- Fake card payment simulation through Mock Payment Service.
 - Internal subscription state.
 - Internal payment state.
 - Internal event log.
 - Received webhook registry.
-- Webhook signature validation.
+- Initial subscription creation flow.
+- Fake card payment simulation through Mock Payment Service.
+- Recurring charge simulation.
+- Subscription plan change flow.
+- Subscription cancellation flow.
+- Webhook receiver endpoint for Mock Payment Service events.
+- Webhook signature validation using HMAC SHA-256.
 - Webhook processing for payment and preapproval events.
-- Support for recurring charge simulation.
-- Support for subscription plan change.
-- Support for subscription cancellation.
-- Memory and file storage modes.
-- Demo state reset endpoint.
+- Provider resource lookup after receiving webhooks.
+- Mapping between provider events and internal application state.
 - Integration configuration endpoint.
 - Integration configuration panel in the UI.
+- Demo state endpoint.
+- Demo state reset endpoint.
+- Memory and file storage modes.
 - Dockerfile.
 - Docker Compose setup.
-- Configurable host port through `DEMO_APP_HOST_PORT`.
-- Shared Docker network support for communicating with Mock Payment Service.
-- Integrated help modal in the UI.
+- Configurable Docker host port through `DEMO_APP_HOST_PORT`.
+- Configurable Docker Compose environment variables for:
+    - `MOCK_PAYMENT_BASE_URL`
+    - `MOCK_PAYMENT_WEBHOOK_SECRET`
+    - `DEMO_APP_PUBLIC_BASE_URL`
+    - `DEMO_APP_WEBHOOK_BASE_URL`
+    - `DEMO_APP_STORAGE_TYPE`
+    - `DEMO_APP_STORAGE_FILE_PATH`
+- Shared Docker network support for running with Mock Payment Service.
+- `.env.example` file.
+- Main project `README.md`.
 - Documentation explaining which parts of the code can be reused as patterns in a real project.
-- Main project README.
-- Environment example file.
+- Integrated help modal in the UI.
+- MIT license.
 
 ### Notes
 
-This application is a local educational demo. It does not process real payments and should not be used as a production billing system.
+This application is a local educational demo.
 
-It is intended to run together with `mock-payment-service`.
+It does not process real payments, real cards or real subscriptions.
+
+It is designed to run together with `mock-payment-service`.
+
+The container listens internally on port `8080`.
+
+The host port can be changed with:
+
+```bash
+DEMO_APP_HOST_PORT=8085 docker compose up --build
+```
+
+Other containers in the same Docker network should continue using:
+
+```txt
+http://subscription-demo-app:8080
+```
+
+StreamBox Demo should call Mock Payment Service using:
+
+```txt
+http://mock-payment-service:9090
+```
+
+### Disclaimer
+
+This project is not affiliated with Mercado Pago, Stripe, PayPal or any real payment provider.
+
+It is a local demo application for development and learning purposes only.
