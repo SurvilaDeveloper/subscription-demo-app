@@ -81,6 +81,20 @@ Actualiza su estado interno
 - Red Docker externa compartida para integrarse con `mock-payment-service` en contenedores separados.
 - Ayuda integrada en la UI.
 - Documentación sobre qué partes del código sirven como referencia para un proyecto real.
+- Menú `Docs` integrado en la UI.
+- Documentación HTML navegable servida desde `/docs/`.
+- Índice de documentación integrado.
+- Guía rápida de uso.
+- Guía de Docker y configuración.
+- Guía de webhooks y estado interno.
+- Guía de troubleshooting.
+- Guía de escenarios de prueba.
+- Guía de seguridad y límites.
+- Guía de arquitectura interna.
+- Guía para migrar a una pasarela real.
+- Referencia de endpoints.
+- Guía de responsabilidades legales, privacidad y prevención de fraude.
+- Recorrido comentado del código de pagos.
 - Licencia MIT.
 
 ---
@@ -1169,33 +1183,45 @@ data/
 
 # Documentación adicional
 
-El proyecto incluye una documentación para entender qué partes del código pueden servir como referencia para una aplicación real:
+StreamBox Demo incluye documentación integrada en la UI.
+
+Con la aplicación levantada, abrir:
+
+```txt
+http://localhost:8080/docs/
+```
+
+Si StreamBox fue publicado en otro puerto, por ejemplo `8085`:
+
+```txt
+http://localhost:8085/docs/
+```
+
+## Documentación integrada
+
+| Página | Descripción |
+|---|---|
+| `/docs/index.html` | Índice de documentación |
+| `/docs/quick-start.html` | Guía rápida de uso |
+| `/docs/docker-configuration.html` | Docker, puertos, variables y red compartida |
+| `/docs/webhooks-and-internal-state.html` | Webhooks, firma y estado interno |
+| `/docs/troubleshooting.html` | Diagnóstico de errores comunes |
+| `/docs/testing-scenarios.html` | Escenarios de prueba |
+| `/docs/security-and-limitations.html` | Seguridad y límites de la demo |
+| `/docs/internal-architecture.html` | Arquitectura interna |
+| `/docs/migrate-to-real-payment-provider.html` | Migración hacia una pasarela real |
+| `/docs/api-reference.html` | Referencia de endpoints |
+| `/docs/legal-responsibilities.html` | Responsabilidades legales, privacidad y fraude |
+| `/docs/payment-code-walkthrough.html` | Recorrido comentado del código de pagos |
+| `/docs/code-to-emulate-in-real-project.html` | Código que sirve como referencia para un proyecto real |
+
+También existe una guía Markdown en:
 
 ```txt
 docs/code-to-emulate-in-real-project.md
 ```
 
-Esa guía explica qué partes conviene emular, por ejemplo:
-
-```txt
-cliente HTTP hacia el proveedor
-servicio de suscripciones o billing
-controlador de webhooks
-validador de firma
-modelos internos de suscripción y pago
-registro de webhooks recibidos
-mapeo de estados externos a internos
-```
-
-Y también qué partes son solamente de demostración:
-
-```txt
-DemoStore
-planes hardcodeados
-tarjetas ficticias
-UI estática educativa
-endpoints específicos de simulación
-```
+Esa guía explica qué partes conviene emular en un proyecto real y qué partes son solo de demostración.
 
 ---
 

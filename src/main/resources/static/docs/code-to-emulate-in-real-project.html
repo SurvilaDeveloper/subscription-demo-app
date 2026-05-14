@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Código para emular · StreamBox Demo</title>
+    <link rel="stylesheet" href="./docs.css" />
+</head>
+<body>
+<div class="docs-shell">
+    <header class="docs-header">
+        <div class="docs-brand">
+            <h1>Código para emular</h1>
+        </div>
+
+        <nav class="docs-actions" aria-label="Acciones">
+            <a class="docs-button" href="./index.html">Docs</a>
+            <a class="docs-button" href="../index.html">StreamBox</a>
+        </nav>
+    </header>
+
+    <div class="docs-layout">
+        <aside class="docs-toc">
+            <strong>Contenido</strong>
+            <a href="#objetivo">Objetivo</a>
+            <a href="#resumen">Resumen</a>
+            <a href="#capas">Capas</a>
+            <a href="#emular">Código para emular</a>
+            <a href="#no-copiar">Qué no copiar tal cual</a>
+            <a href="#estructura">Estructura real sugerida</a>
+            <a href="#flujo">Flujo mínimo</a>
+            <a href="#checklist">Checklist</a>
+            <a href="#regla-final">Regla final</a>
+        </aside>
+
+        <main class="docs-content">
+            <h1 id="objetivo">Qué código de StreamBox Demo conviene emular en un proyecto real</h1>
+
+            <p>
+                Esta guía explica qué partes de <code>subscription-demo-app</code> sirven como referencia
+                para implementar pagos en una aplicación real, y qué partes son solamente código de demostración.
+            </p>
+
+            <p>
+                StreamBox Demo no intenta ser una aplicación productiva. Es un proyecto educativo que muestra
+                el flujo completo desde el punto de vista de una aplicación principal.
+            </p>
+
+            <div class="docs-callout">
+                La pregunta central es: qué código debería mirar y adaptar cuando integre pagos en un proyecto real.
+            </div>
+
+            <h2 id="resumen">Resumen rápido</h2>
+
+            <p>En un proyecto real conviene emular principalmente estas piezas:</p>
+
+            <pre><code>Cliente HTTP hacia la pasarela
+DTOs de entrada/salida del proveedor
+Servicio de billing/suscripciones
+Controlador de webhooks
+Validador de firma del webhook
+Modelos internos de suscripción y pago
+Registro de webhooks recibidos
+Mapeo entre estados externos e internos
+Eventos internos o logs de negocio</code></pre>
+
+            <p>No conviene copiar tal cual:</p>
+
+            <pre><code>DemoStore en memoria/archivo
+Planes hardcodeados
+Tarjetas ficticias
+UI estática educativa
+Endpoints específicos de simulación</code></pre>
+
+            <h2 id="capas">Qué representa cada capa</h2>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Tipo de código</th>
+                    <th>Sirve para proyecto real</th>
+                    <th>Comentario</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>Integración HTTP con el proveedor</td>
+                    <td>Sí</td>
+                    <td>Cambiaría el proveedor real, pero la idea se mantiene.</td>
+                </tr>
+                <tr>
+                    <td>Webhook receiver</td>
+                    <td>Sí</td>
+                    <td>Es una parte clave de cualquier integración real.</td>
+                </tr>
+                <tr>
+                    <td>Validación de firma</td>
+                    <td>Sí</td>
+                    <td>Adaptar a la firma del proveedor real.</td>
+                </tr>
+                <tr>
+                    <td>Estado interno de suscripción</td>
+                    <td>Sí</td>
+                    <td>En un proyecto real iría en base de datos.</td>
+                </tr>
+                <tr>
+                    <td>Estado interno de pagos</td>
+                    <td>Sí</td>
+                    <td>En un proyecto real iría en base de datos.</td>
+                </tr>
+                <tr>
+                    <td>Eventos internos</td>
+                    <td>Sí</td>
+                    <td>Puede convertirse en logs, auditoría o tabla de eventos.</td>
+                </tr>
+                <tr>
+                    <td>DemoStore</td>
+                    <td>No como producción</td>
+                    <td>Reemplazar por repositorios y base de datos.</td>
+                </tr>
+                <tr>
+                    <td>UI de StreamBox</td>
+                    <td>Solo como referencia educativa</td>
+                    <td>No es patrón productivo obligatorio.</td>
+                </tr>
+                <tr>
+                    <td>PlanCatalogService hardcodeado</td>
+                    <td>Solo para demo</td>
+                    <td>En producción los planes suelen estar en base de datos.</td>
+                </tr>
+                <tr>
+                    <td>Tarjetas ficticias</td>
+                    <td>No</td>
+                    <td>Solo existen porque el proveedor es mock.</td>
+                </tr>
+                <tr>
+                    <td>Acciones de simulación</td>
+                    <td>No</td>
+                    <td>Son útiles para aprender, no para producción.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h2 id="emular">Código que conviene emular</h2>
+
+            <h3>1. Cliente HTTP hacia la pasarela</h3>
+
+            <p>Archivo de referencia:</p>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/client/MockPaymentClient.java</code></pre>
+
+            <p>
+                Este código sirve como ejemplo de una capa dedicada a hablar con el proveedor externo.
+                En un proyecto real, esta capa podría llamarse:
+            </p>
+
+            <pre><code>PaymentProviderClient
+MercadoPagoClient
+StripeClient
+MockPaymentClient</code></pre>
+
+            <p>
+                La idea importante es que el resto del sistema no debería armar URLs ni llamar directamente
+                al proveedor desde cualquier lugar.
+            </p>
+
+            <pre><code>Controller
+  ↓
+Service
+  ↓
+PaymentProviderClient
+  ↓
+Proveedor externo</code></pre>
+
+            <p>En producción, esta clase debería manejar también:</p>
+
+            <pre><code>timeouts
+errores HTTP
+reintentos si corresponde
+logs
+headers de autenticación
+tokens del proveedor
+mapeo de errores del proveedor</code></pre>
+
+            <h3>2. DTOs del proveedor</h3>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/dto/mock/</code></pre>
+
+            <p>
+                Estos DTOs representan el contrato con <code>mock-payment-service</code>.
+                En un proyecto real conviene tener DTOs específicos para el proveedor externo.
+            </p>
+
+            <pre><code>MercadoPagoCreatePreapprovalRequest
+MercadoPagoPreapprovalResponse
+MercadoPagoPaymentResponse
+StripeSubscriptionResponse</code></pre>
+
+            <p>
+                La idea importante es separar los DTOs del proveedor de los modelos internos de la aplicación.
+            </p>
+
+            <h3>3. Servicio de suscripciones o billing</h3>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/service/SubscriptionService.java</code></pre>
+
+            <p>
+                Este es uno de los archivos más importantes para mirar. Muestra la lógica de orquestación.
+            </p>
+
+            <pre><code>Crear suscripción interna
+  ↓
+Crear suscripción en proveedor
+  ↓
+Guardar providerSubscriptionId
+  ↓
+Procesar pago inicial o esperar confirmación
+  ↓
+Registrar pago interno
+  ↓
+Actualizar estado interno</code></pre>
+
+            <p>
+                En un proyecto real, esta clase podría dividirse en servicios como:
+            </p>
+
+            <pre><code>BillingService
+BusinessSubscriptionService
+PaymentService
+WebhookProcessingService</code></pre>
+
+            <h3>4. Controlador de webhooks</h3>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/controller/MockPaymentWebhookController.java</code></pre>
+
+            <p>Este código muestra el patrón correcto:</p>
+
+            <pre><code>Recibir webhook
+  ↓
+Extraer headers
+  ↓
+Validar firma
+  ↓
+Registrar webhook recibido
+  ↓
+Delegar procesamiento al servicio
+  ↓
+Marcar como procesado o fallido</code></pre>
+
+            <p>
+                No conviene meter toda la lógica de negocio dentro del controller.
+            </p>
+
+            <h3>5. Validador de firma</h3>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/service/WebhookSignatureVerifier.java</code></pre>
+
+            <p>
+                Este patrón sirve para producción, aunque el algoritmo exacto depende del proveedor real.
+            </p>
+
+            <pre><code>No procesar un webhook sin validar que realmente vino del proveedor esperado.</code></pre>
+
+            <h3>6. Procesamiento de webhooks</h3>
+
+            <pre><code>SubscriptionService.processWebhook(...)</code></pre>
+
+            <p>Este código muestra una regla muy importante:</p>
+
+            <pre><code>El webhook se trata como un aviso, no como fuente final de verdad.</code></pre>
+
+            <p>El flujo recomendado es:</p>
+
+            <pre><code>Webhook recibido
+  ↓
+Firma válida
+  ↓
+Leer type/action/data.id
+  ↓
+Consultar al proveedor:
+      GET /payment/{id}
+      GET /preapproval/{id}
+  ↓
+Actualizar estado interno</code></pre>
+
+            <p>
+                En producción, este procesamiento debería ser idempotente. Si llega el mismo webhook dos veces,
+                la aplicación no debería duplicar pagos ni romper el estado.
+            </p>
+
+            <h3>7. Modelo interno de suscripción</h3>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/model/DemoSubscription.java</code></pre>
+
+            <p>En un proyecto real, este modelo podría convertirse en una entidad JPA:</p>
+
+            <pre><code>BusinessSubscription</code></pre>
+
+            <p>Campos útiles para producción:</p>
+
+            <pre><code>id
+businessId
+planId
+provider
+providerSubscriptionId
+status
+amount
+currency
+payerEmail
+createdAt
+updatedAt
+cancelledAt</code></pre>
+
+            <h3>8. Modelo interno de pago</h3>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/model/DemoPayment.java</code></pre>
+
+            <p>En un proyecto real, este modelo podría convertirse en una entidad:</p>
+
+            <pre><code>BusinessPayment
+SubscriptionPayment
+PaymentTransaction</code></pre>
+
+            <p>Campos útiles:</p>
+
+            <pre><code>id
+subscriptionId
+providerPaymentId
+status
+statusDetail
+amount
+currency
+createdAt
+rawProviderStatus</code></pre>
+
+            <h3>9. Registro de webhooks recibidos</h3>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/model/DemoReceivedWebhook.java</code></pre>
+
+            <p>Un proyecto real podría tener una tabla:</p>
+
+            <pre><code>payment_webhook_event</code></pre>
+
+            <p>Campos útiles:</p>
+
+            <pre><code>id
+provider
+requestId
+eventId
+type
+action
+dataId
+validSignature
+processed
+error
+receivedAt
+processedAt
+payloadRaw</code></pre>
+
+            <h3>10. Mapeo de estados</h3>
+
+            <pre><code>SubscriptionService.mapPreapprovalStatus(...)
+SubscriptionService.mapPaymentStatus(...)</code></pre>
+
+            <p>
+                Cada proveedor tiene sus propios estados. La aplicación real debería mapearlos a estados internos propios.
+            </p>
+
+            <pre><code>Proveedor: authorized
+App interna: ACTIVE
+
+Proveedor: payment_failed
+App interna: PAYMENT_FAILED
+
+Proveedor: cancelled
+App interna: CANCELLED</code></pre>
+
+            <h2 id="no-copiar">Código que no conviene copiar tal cual</h2>
+
+            <h3>1. DemoStore</h3>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/store/DemoStore.java</code></pre>
+
+            <p>
+                Sirve para la demo porque permite persistencia simple en memoria o archivo.
+                En producción debería reemplazarse por:
+            </p>
+
+            <pre><code>JPA repositories
+base de datos
+transacciones
+índices
+constraints
+migraciones Flyway/Liquibase</code></pre>
+
+            <h3>2. PlanCatalogService hardcodeado</h3>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/service/PlanCatalogService.java</code></pre>
+
+            <p>
+                En producción, los planes deberían venir de una base de datos, configuración administrable
+                o panel de administración.
+            </p>
+
+            <h3>3. Tarjetas ficticias</h3>
+
+            <p>
+                Las tarjetas ficticias solo existen porque <code>mock-payment-service</code> es un simulador.
+                En producción, la aplicación principal normalmente no debería manejar números de tarjeta directamente.
+            </p>
+
+            <h3>4. UI estática</h3>
+
+            <p>
+                La UI de StreamBox sirve para explicar el flujo. En una aplicación real, la UI podría estar en:
+            </p>
+
+            <pre><code>Next.js
+React
+Angular
+Vue
+Astro
+mobile app</code></pre>
+
+            <h2 id="estructura">Estructura sugerida para un proyecto real</h2>
+
+            <pre><code>billing/
+  controller/
+    BillingController.java
+    PaymentWebhookController.java
+
+  service/
+    BillingService.java
+    PaymentWebhookService.java
+    PaymentProviderService.java
+
+  provider/
+    PaymentProviderClient.java
+    MercadoPagoClient.java
+    MockPaymentClient.java
+
+  dto/
+    StartSubscriptionRequest.java
+    BillingSubscriptionResponse.java
+
+  dto/provider/
+    ProviderCreateSubscriptionRequest.java
+    ProviderSubscriptionResponse.java
+    ProviderPaymentResponse.java
+
+  model/
+    BusinessSubscription.java
+    BusinessPayment.java
+    PaymentWebhookEvent.java
+
+  repository/
+    BusinessSubscriptionRepository.java
+    BusinessPaymentRepository.java
+    PaymentWebhookEventRepository.java
+
+  mapper/
+    PaymentStatusMapper.java
+    SubscriptionStatusMapper.java</code></pre>
+
+            <h2 id="flujo">Flujo mínimo para emular en producción</h2>
+
+            <h3>Crear una suscripción</h3>
+
+            <pre><code>1. Validar plan interno.
+2. Crear suscripción local en PENDING.
+3. Llamar al proveedor.
+4. Guardar providerSubscriptionId.
+5. Devolver init_point o estado inicial al frontend.</code></pre>
+
+            <h3>Recibir webhook</h3>
+
+            <pre><code>1. Recibir request.
+2. Extraer headers.
+3. Validar firma.
+4. Registrar evento recibido.
+5. Verificar idempotencia.
+6. Consultar recurso actualizado al proveedor.
+7. Actualizar entidad interna.
+8. Marcar webhook como procesado.
+9. Responder 200 OK.</code></pre>
+
+            <h3>Procesar pago</h3>
+
+            <pre><code>1. Consultar pago al proveedor.
+2. Buscar suscripción interna por providerSubscriptionId.
+3. Verificar si ese providerPaymentId ya fue guardado.
+4. Crear o actualizar pago interno.
+5. Mapear estado externo a estado interno.
+6. Actualizar suscripción interna.</code></pre>
+
+            <h2 id="checklist">Checklist para adaptar este código a un proyecto real</h2>
+
+            <pre><code>Crear entidades reales en base de datos.
+Crear repositorios.
+Crear migraciones.
+Crear PaymentProviderClient.
+Crear DTOs del proveedor.
+Crear BillingService.
+Crear WebhookController.
+Crear WebhookSignatureVerifier.
+Crear tabla de webhooks recibidos.
+Implementar idempotencia.
+Mapear estados externos a internos.
+Agregar logs.
+Agregar tests.
+Agregar configuración por variables de entorno.</code></pre>
+
+            <h2>Relación con chatbot-platform-api</h2>
+
+            <pre><code>BUSINESS_ADMIN elige plan
+  ↓
+chatbot-platform-api crea BusinessSubscription PENDING
+  ↓
+chatbot-platform-api llama al proveedor
+  ↓
+guarda providerSubscriptionId
+  ↓
+recibe webhook
+  ↓
+valida firma
+  ↓
+consulta pago/suscripción al proveedor
+  ↓
+actualiza BusinessSubscription
+  ↓
+habilita, limita o suspende funcionalidades según el plan y el estado de pago</code></pre>
+
+            <p>Entidades posibles:</p>
+
+            <pre><code>PlatformPlan
+BusinessSubscription
+BusinessPayment
+PaymentWebhookEvent</code></pre>
+
+            <p>Estados posibles:</p>
+
+            <pre><code>PENDING
+ACTIVE
+PAYMENT_FAILED
+PAUSED
+CANCELLED</code></pre>
+
+            <h2 id="regla-final">Regla final</h2>
+
+            <p>
+                El código más importante para emular no es el que simula pagos, sino el que muestra cómo una
+                aplicación real debe pensar la integración:
+            </p>
+
+            <pre><code>estado interno propio
+provider IDs guardados
+webhooks firmados
+consulta posterior al proveedor
+idempotencia
+mapeo de estados
+auditoría de eventos</code></pre>
+
+            <div class="docs-callout">
+                StreamBox Demo es útil porque muestra ese flujo completo en una versión pequeña, visible y fácil de probar.
+            </div>
+        </main>
+    </div>
+</div>
+</body>
+</html>

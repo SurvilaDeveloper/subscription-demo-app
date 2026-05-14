@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Migrar a pasarela real · StreamBox Demo</title>
+    <link rel="stylesheet" href="./docs.css" />
+</head>
+<body>
+<div class="docs-shell">
+    <header class="docs-header">
+        <div class="docs-brand">
+            <h1>Migrar a pasarela real</h1>
+        </div>
+
+        <nav class="docs-actions" aria-label="Acciones">
+            <a class="docs-button" href="./index.html">Docs</a>
+            <a class="docs-button" href="../index.html">StreamBox</a>
+        </nav>
+    </header>
+
+    <div class="docs-layout">
+        <aside class="docs-toc">
+            <strong>Contenido</strong>
+            <a href="#objetivo">Objetivo</a>
+            <a href="#idea-central">Idea central</a>
+            <a href="#que-se-conserva">Qué se conserva</a>
+            <a href="#que-cambia">Qué cambia</a>
+            <a href="#provider-client">PaymentProviderClient</a>
+            <a href="#dto">DTOs</a>
+            <a href="#subscription-service">Servicio de billing</a>
+            <a href="#webhooks">Webhooks reales</a>
+            <a href="#firma">Firma de webhooks</a>
+            <a href="#estado">Estados internos</a>
+            <a href="#base-datos">Base de datos</a>
+            <a href="#idempotencia">Idempotencia</a>
+            <a href="#frontend">Frontend y checkout</a>
+            <a href="#variables">Variables</a>
+            <a href="#plan">Plan de migración</a>
+            <a href="#checklist">Checklist</a>
+        </aside>
+
+        <main class="docs-content">
+            <h1 id="objetivo">Migrar StreamBox desde Mock Payment Service a una pasarela real</h1>
+
+            <p>
+                Esta guía explica cómo adaptar el patrón de StreamBox Demo para integrarlo con una pasarela
+                de pagos real.
+            </p>
+
+            <p>
+                StreamBox Demo usa Mock Payment Service para aprender el flujo completo sin procesar dinero real.
+                En una aplicación productiva, el mock se reemplaza por un proveedor real como Mercado Pago,
+                Stripe, PayPal u otro.
+            </p>
+
+            <div class="docs-callout">
+                La migración no consiste solamente en cambiar una URL. Hay que revisar cliente HTTP,
+                SDK, DTOs, webhooks, validación de firma, estados internos, base de datos, idempotencia,
+                seguridad, términos comerciales y pruebas de sandbox.
+            </div>
+
+            <h2 id="idea-central">Idea central</h2>
+
+            <pre><code>StreamBox Demo actual
+  ↓
+MockPaymentClient
+  ↓
+Mock Payment Service
+
+Aplicación real
+  ↓
+PaymentProviderClient
+  ↓
+MercadoPagoClient / StripeClient / PayPalClient / Otro proveedor
+  ↓
+Pasarela real</code></pre>
+
+            <p>
+                El objetivo es conservar la arquitectura útil de StreamBox, pero reemplazar las piezas específicas
+                del mock por piezas adaptadas al proveedor real.
+            </p>
+
+            <h2 id="que-se-conserva">Qué se conserva del patrón de StreamBox</h2>
+
+            <p>
+                Algunas ideas de StreamBox son buenas y conviene mantenerlas.
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Idea</th>
+                    <th>Por qué se conserva</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>Cliente dedicado para hablar con el proveedor</td>
+                    <td>Evita llamadas HTTP dispersas en controllers y servicios.</td>
+                </tr>
+                <tr>
+                    <td>Estado interno propio</td>
+                    <td>La app necesita saber qué plan tiene cada cliente, más allá del proveedor.</td>
+                </tr>
+                <tr>
+                    <td>IDs externos guardados</td>
+                    <td>Permiten relacionar pagos y suscripciones internas con recursos del proveedor.</td>
+                </tr>
+                <tr>
+                    <td>Webhook receiver</td>
+                    <td>Permite reaccionar a eventos que ocurren fuera del flujo inmediato del usuario.</td>
+                </tr>
+                <tr>
+                    <td>Validación de firma</td>
+                    <td>Evita procesar eventos falsos.</td>
+                </tr>
+                <tr>
+                    <td>Consulta posterior al proveedor</td>
+                    <td>Evita confiar ciegamente en el body del webhook.</td>
+                </tr>
+                <tr>
+                    <td>Mapeo de estados</td>
+                    <td>Permite desacoplar el dominio interno del vocabulario del proveedor.</td>
+                </tr>
+                <tr>
+                    <td>Registro de webhooks recibidos</td>
+                    <td>Ayuda a depurar, auditar e implementar idempotencia.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h2 id="que-cambia">Qué cambia al usar una pasarela real</h2>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>En StreamBox Demo</th>
+                    <th>Con pasarela real</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>MockPaymentClient</code></td>
+                    <td>Cliente propio del proveedor o SDK oficial encapsulado.</td>
+                </tr>
+                <tr>
+                    <td>Tarjetas ficticias</td>
+                    <td>Checkout hospedado, tokenización o componentes seguros.</td>
+                </tr>
+                <tr>
+                    <td><code>MockPaymentWebhookController</code></td>
+                    <td>Controller de webhooks del proveedor real.</td>
+                </tr>
+                <tr>
+                    <td><code>WebhookSignatureVerifier</code> del mock</td>
+                    <td>Validador de firma según documentación oficial del proveedor.</td>
+                </tr>
+                <tr>
+                    <td><code>DemoStore</code></td>
+                    <td>Base de datos real con transacciones y constraints.</td>
+                </tr>
+                <tr>
+                    <td>Estados simples del mock</td>
+                    <td>Estados reales del proveedor, a veces más numerosos y complejos.</td>
+                </tr>
+                <tr>
+                    <td>Eventos educativos</td>
+                    <td>Logs estructurados, auditoría y monitoreo.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h2 id="provider-client">Crear una interfaz PaymentProviderClient</h2>
+
+            <p>
+                En la demo, StreamBox depende directamente de <code>MockPaymentClient</code>.
+                Para una aplicación real, conviene crear una interfaz propia.
+            </p>
+
+            <pre><code>public interface PaymentProviderClient {
+
+    ProviderSubscriptionResponse createSubscription(CreateProviderSubscriptionRequest request);
+
+    ProviderSubscriptionResponse getSubscription(String providerSubscriptionId);
+
+    ProviderPaymentResponse getPayment(String providerPaymentId);
+
+    void cancelSubscription(String providerSubscriptionId);
+
+    void changePlan(String providerSubscriptionId, ChangeProviderPlanRequest request);
+}</code></pre>
+
+            <p>
+                Después se puede tener una implementación para el mock y otra para el proveedor real:
+            </p>
+
+            <pre><code>@Component
+public class MockPaymentProviderClient implements PaymentProviderClient {
+    ...
+}
+
+@Component
+public class MercadoPagoPaymentProviderClient implements PaymentProviderClient {
+    ...
+}
+
+@Component
+public class StripePaymentProviderClient implements PaymentProviderClient {
+    ...
+}</code></pre>
+
+            <h3>Ventaja</h3>
+
+            <p>
+                El servicio de billing no necesita saber si abajo hay un mock, un SDK oficial o llamadas HTTP directas.
+            </p>
+
+            <pre><code>BillingService
+  ↓
+PaymentProviderClient
+  ↓
+Implementación concreta</code></pre>
+
+            <div class="docs-callout">
+                Esta abstracción evita que toda la aplicación quede acoplada a una sola pasarela.
+                Incluso si inicialmente se usa un único proveedor, la separación mejora el diseño.
+            </div>
+
+            <h2 id="dto">Separar DTOs internos y DTOs del proveedor</h2>
+
+            <p>
+                En StreamBox Demo ya existe una separación entre DTOs propios y DTOs del mock.
+                Al migrar a un proveedor real, conviene mantener esa idea.
+            </p>
+
+            <pre><code>dto/
+  StartSubscriptionRequest.java
+  StartSubscriptionResponse.java
+
+dto/provider/
+  CreateProviderSubscriptionRequest.java
+  ProviderSubscriptionResponse.java
+  ProviderPaymentResponse.java
+
+dto/mercadopago/
+  MercadoPagoCreatePreapprovalRequest.java
+  MercadoPagoPreapprovalResponse.java
+
+dto/stripe/
+  StripeCheckoutSessionResponse.java
+  StripeSubscriptionResponse.java</code></pre>
+
+            <h3>Qué evitar</h3>
+
+            <p>
+                No conviene usar directamente los objetos externos del proveedor como entidades internas.
+            </p>
+
+            <pre><code>No ideal:
+BusinessSubscription guarda todo el JSON completo del proveedor como modelo principal.
+
+Mejor:
+BusinessSubscription guarda campos internos importantes.
+Provider raw payload se guarda aparte si hace falta auditoría.</code></pre>
+
+            <h2 id="subscription-service">Adaptar SubscriptionService a un BillingService real</h2>
+
+            <p>
+                En StreamBox Demo, <code>SubscriptionService</code> crea la suscripción interna, llama al mock,
+                guarda el ID externo, procesa pagos y webhooks.
+            </p>
+
+            <p>
+                En una aplicación real podría convertirse en algo como:
+            </p>
+
+            <pre><code>BillingService
+SubscriptionBillingService
+BusinessSubscriptionService
+PaymentWebhookProcessingService</code></pre>
+
+            <h3>Flujo recomendado para crear una suscripción</h3>
+
+            <pre><code>1. Validar usuario autenticado.
+2. Validar plan elegido.
+3. Crear suscripción interna PENDING.
+4. Crear recurso en el proveedor real.
+5. Guardar providerSubscriptionId o providerCheckoutSessionId.
+6. Devolver URL de checkout, client secret o estado inicial.
+7. Esperar confirmación por webhook.
+8. Activar internamente solo cuando el proveedor confirme pago válido.</code></pre>
+
+            <h3>Importante</h3>
+
+            <p>
+                En muchas pasarelas reales, el pago puede no ocurrir inmediatamente en el mismo request.
+                Puede haber redirección a checkout, autenticación adicional, pago pendiente, revisión antifraude
+                o confirmación posterior por webhook.
+            </p>
+
+            <pre><code>No asumir:
+createSubscription() = usuario activo inmediatamente
+
+Mejor:
+createSubscription() = estado interno PENDING
+webhook confirmado = estado interno ACTIVE</code></pre>
+
+            <h2 id="webhooks">Adaptar webhooks reales</h2>
+
+            <p>
+                En StreamBox Demo el endpoint es:
+            </p>
+
+            <pre><code>POST /api/webhooks/mock-payment</code></pre>
+
+            <p>
+                Con un proveedor real se podría tener:
+            </p>
+
+            <pre><code>POST /api/webhooks/mercado-pago
+POST /api/webhooks/stripe
+POST /api/webhooks/paypal</code></pre>
+
+            <p>
+                O un endpoint genérico:
+            </p>
+
+            <pre><code>POST /api/webhooks/payments/{provider}</code></pre>
+
+            <h3>Flujo recomendado</h3>
+
+            <pre><code>1. Recibir webhook.
+2. Extraer headers.
+3. Guardar evento recibido en estado RECEIVED.
+4. Validar firma u origen.
+5. Rechazar o marcar inválido si falla validación.
+6. Verificar idempotencia.
+7. Consultar recurso actualizado al proveedor.
+8. Actualizar pago o suscripción interna.
+9. Marcar evento como PROCESSED.
+10. Responder 2xx si corresponde.</code></pre>
+
+            <h3>Tabla sugerida</h3>
+
+            <pre><code>payment_webhook_event
+  id
+  provider
+  provider_event_id
+  request_id
+  type
+  action
+  data_id
+  valid_signature
+  processed
+  processing_error
+  payload_raw
+  received_at
+  processed_at</code></pre>
+
+            <h2 id="firma">Validación de firma</h2>
+
+            <p>
+                El validador de StreamBox Demo usa HMAC SHA-256 con un formato propio del mock.
+                En una pasarela real, hay que usar el mecanismo oficial del proveedor.
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Proveedor</th>
+                    <th>Qué revisar</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>Mercado Pago</td>
+                    <td>Headers de notificación, validación de origen/firma, consulta posterior del recurso.</td>
+                </tr>
+                <tr>
+                    <td>Stripe</td>
+                    <td>Webhook signing secret, header de firma y construcción oficial del evento.</td>
+                </tr>
+                <tr>
+                    <td>PayPal</td>
+                    <td>Validación de webhook según API o SDK oficial.</td>
+                </tr>
+                <tr>
+                    <td>Otro proveedor</td>
+                    <td>Documentación oficial de webhooks, firma, certificados o secret compartido.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <div class="docs-callout">
+                No reutilices literalmente el algoritmo de firma del mock para un proveedor real.
+                El patrón se conserva, pero la implementación debe seguir la documentación oficial de la pasarela.
+            </div>
+
+            <h2 id="estado">Mapear estados externos a estados internos</h2>
+
+            <p>
+                StreamBox Demo mapea estados del proveedor a estados propios.
+                Esta idea debe mantenerse.
+            </p>
+
+            <pre><code>Proveedor real
+  approved / authorized / paid / succeeded
+  ↓
+Estado interno
+  ACTIVE / APPROVED</code></pre>
+
+            <h3>Ejemplo de estados internos de suscripción</h3>
+
+            <pre><code>PENDING
+ACTIVE
+PAYMENT_FAILED
+PAUSED
+CANCELLED
+EXPIRED
+REFUNDED
+DISPUTED</code></pre>
+
+            <h3>Ejemplo de estados internos de pago</h3>
+
+            <pre><code>PENDING
+APPROVED
+REJECTED
+IN_PROCESS
+REFUNDED
+CHARGEBACK
+CANCELLED
+UNKNOWN</code></pre>
+
+            <p>
+                Los estados internos deben representar lo que la aplicación necesita para tomar decisiones,
+                no solo copiar exactamente los nombres del proveedor.
+            </p>
+
+            <h2 id="base-datos">Reemplazar DemoStore por base de datos</h2>
+
+            <p>
+                <code>DemoStore</code> sirve para la demo, pero no para producción.
+                Al migrar a una app real, debería reemplazarse por entidades, repositorios y migraciones.
+            </p>
+
+            <h3>Entidades sugeridas</h3>
+
+            <pre><code>BusinessSubscription
+BusinessPayment
+PaymentWebhookEvent
+PaymentAuditEvent
+PlatformPlan</code></pre>
+
+            <h3>Repositorios sugeridos</h3>
+
+            <pre><code>BusinessSubscriptionRepository
+BusinessPaymentRepository
+PaymentWebhookEventRepository
+PlatformPlanRepository</code></pre>
+
+            <h3>Constraints importantes</h3>
+
+            <pre><code>UNIQUE(provider_subscription_id)
+UNIQUE(provider_payment_id)
+UNIQUE(provider_event_id)
+UNIQUE(request_id)</code></pre>
+
+            <h3>Por qué importan</h3>
+
+            <p>
+                Los webhooks pueden llegar más de una vez. Los retries pueden duplicar requests.
+                La base de datos debe ayudar a impedir duplicaciones.
+            </p>
+
+            <h2 id="idempotencia">Idempotencia</h2>
+
+            <p>
+                Una integración de pagos debe tolerar eventos repetidos.
+            </p>
+
+            <pre><code>Mismo webhook recibido dos veces
+  ↓
+Mismo provider_event_id
+  ↓
+Procesar una sola vez</code></pre>
+
+            <p>
+                También debe tolerar pagos ya registrados:
+            </p>
+
+            <pre><code>Mismo provider_payment_id
+  ↓
+No crear otro pago interno</code></pre>
+
+            <h3>Estrategia recomendada</h3>
+
+            <ol>
+                <li>Guardar el evento recibido antes de procesarlo.</li>
+                <li>Usar un identificador único del proveedor.</li>
+                <li>Crear constraints únicos.</li>
+                <li>Procesar dentro de una transacción.</li>
+                <li>Marcar el evento como procesado al final.</li>
+                <li>Si llega repetido, devolver respuesta exitosa sin duplicar efectos.</li>
+            </ol>
+
+            <h2 id="frontend">Frontend y checkout real</h2>
+
+            <p>
+                StreamBox Demo muestra tarjetas ficticias en un select porque está integrado con un mock.
+                En una aplicación real, el frontend no debería manejar tarjetas de esa manera.
+            </p>
+
+            <h3>Opciones frecuentes</h3>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Opción</th>
+                    <th>Descripción</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>Checkout hospedado</td>
+                    <td>El usuario paga en una página del proveedor.</td>
+                </tr>
+                <tr>
+                    <td>Checkout embebido/tokenizado</td>
+                    <td>El proveedor entrega componentes seguros para capturar datos.</td>
+                </tr>
+                <tr>
+                    <td>SDK frontend</td>
+                    <td>El frontend obtiene tokens o confirma pagos sin exponer datos sensibles al backend.</td>
+                </tr>
+                <tr>
+                    <td>API directa</td>
+                    <td>Mayor control, pero más responsabilidad de seguridad y cumplimiento.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <div class="docs-callout">
+                Para reducir riesgo, conviene evitar que el backend de la aplicación toque números completos
+                de tarjeta o códigos de seguridad.
+            </div>
+
+            <h2 id="variables">Variables de entorno reales</h2>
+
+            <p>
+                Las variables de StreamBox Demo deberían evolucionar al usar una pasarela real.
+            </p>
+
+            <h3>Ejemplo conceptual</h3>
+
+            <pre><code>PAYMENT_PROVIDER=mercado-pago
+PAYMENT_PROVIDER_BASE_URL=https://api.proveedor.com
+PAYMENT_PROVIDER_ACCESS_TOKEN=...
+PAYMENT_PROVIDER_PUBLIC_KEY=...
+PAYMENT_PROVIDER_WEBHOOK_SECRET=...
+APP_PUBLIC_BASE_URL=https://app.example.com
+APP_WEBHOOK_BASE_URL=https://api.example.com</code></pre>
+
+            <h3>Buenas prácticas</h3>
+
+            <ul>
+                <li>No commitear credenciales reales.</li>
+                <li>Separar credenciales sandbox y producción.</li>
+                <li>Usar variables de entorno o secret manager.</li>
+                <li>No mostrar secrets en la UI.</li>
+                <li>No imprimir tokens en logs.</li>
+                <li>Rotar credenciales si se filtran.</li>
+            </ul>
+
+            <h2 id="plan">Plan de migración recomendado</h2>
+
+            <p>
+                Una forma ordenada de migrar sería:
+            </p>
+
+            <ol>
+                <li>Crear una interfaz <code>PaymentProviderClient</code>.</li>
+                <li>Hacer que <code>MockPaymentClient</code> implemente esa interfaz.</li>
+                <li>Renombrar el servicio de demo hacia un nombre más general, como <code>BillingService</code>.</li>
+                <li>Crear entidades reales en base de datos.</li>
+                <li>Crear migraciones.</li>
+                <li>Crear tabla de webhooks recibidos.</li>
+                <li>Agregar constraints únicos.</li>
+                <li>Agregar idempotencia transaccional.</li>
+                <li>Crear implementación del proveedor real.</li>
+                <li>Configurar credenciales sandbox.</li>
+                <li>Adaptar el frontend al checkout real.</li>
+                <li>Implementar webhook real.</li>
+                <li>Validar firma según el proveedor.</li>
+                <li>Probar pagos aprobados, rechazados, pendientes y cancelados.</li>
+                <li>Recién después pasar a credenciales productivas.</li>
+            </ol>
+
+            <h2 id="checklist">Checklist antes de salir del mock</h2>
+
+            <ol>
+                <li>La app tiene entidades reales de suscripción y pago.</li>
+                <li>La app guarda IDs externos del proveedor.</li>
+                <li>La app tiene tabla de webhooks recibidos.</li>
+                <li>La app valida firma de webhooks.</li>
+                <li>La app consulta el recurso actualizado después del webhook.</li>
+                <li>La app procesa webhooks de forma idempotente.</li>
+                <li>La app no guarda tarjetas reales.</li>
+                <li>La app usa HTTPS en entornos públicos.</li>
+                <li>La app separa credenciales sandbox y producción.</li>
+                <li>La app tiene logs sin datos sensibles.</li>
+                <li>La app maneja pagos rechazados.</li>
+                <li>La app maneja pagos pendientes.</li>
+                <li>La app maneja cancelaciones.</li>
+                <li>La app maneja reembolsos o disputas si el negocio lo requiere.</li>
+                <li>La app fue probada con webhooks repetidos.</li>
+                <li>La app tiene política de cancelación y reembolso clara.</li>
+            </ol>
+
+            <div class="docs-callout">
+                El mock sirve para aprender el patrón. La pasarela real define los detalles finales:
+                endpoints, SDK, firma, eventos, estados, credenciales, restricciones y reglas comerciales.
+            </div>
+        </main>
+    </div>
+</div>
+</body>
+</html>

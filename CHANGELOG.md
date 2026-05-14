@@ -10,6 +10,40 @@ This project follows a simple semantic versioning style:
 
 ---
 
+## 1.1.0 - 2026-05-14
+
+### Added
+
+- Added integrated `Docs` menu to StreamBox Demo UI.
+- Added static HTML documentation section under `/docs/`.
+- Added documentation index page.
+- Added quick start guide.
+- Added Docker and configuration guide.
+- Added webhooks and internal state guide.
+- Added troubleshooting guide.
+- Added testing scenarios guide.
+- Added security and limitations guide.
+- Added internal architecture guide.
+- Added real payment provider migration guide.
+- Added API reference guide.
+- Added legal responsibilities, privacy and fraud prevention guide.
+- Added payment code walkthrough documentation.
+- Added navigable documentation pages for using StreamBox Demo without opening the project in an IDE.
+
+### Changed
+
+- Expanded project documentation for Docker-based usage.
+- Improved documentation around the relationship between StreamBox Demo and Mock Payment Service.
+- Improved documentation around what code can be used as a reference for real projects.
+
+### Notes
+
+This release focuses on documentation and developer experience.
+
+StreamBox Demo can now be used as a Docker-based educational application while still exposing detailed documentation about its payment integration flow directly from the browser.
+
+---
+
 ## 1.0.0 - Initial release
 
 ### Added

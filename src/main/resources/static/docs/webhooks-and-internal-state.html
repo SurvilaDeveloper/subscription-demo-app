@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Webhooks y estado interno · StreamBox Demo</title>
+    <link rel="stylesheet" href="./docs.css" />
+</head>
+<body>
+<div class="docs-shell">
+    <header class="docs-header">
+        <div class="docs-brand">
+            <h1>Webhooks y estado interno</h1>
+        </div>
+
+        <nav class="docs-actions" aria-label="Acciones">
+            <a class="docs-button" href="./index.html">Docs</a>
+            <a class="docs-button" href="../index.html">StreamBox</a>
+        </nav>
+    </header>
+
+    <div class="docs-layout">
+        <aside class="docs-toc">
+            <strong>Contenido</strong>
+            <a href="#objetivo">Objetivo</a>
+            <a href="#idea-central">Idea central</a>
+            <a href="#flujo">Flujo completo</a>
+            <a href="#endpoint">Endpoint receptor</a>
+            <a href="#headers">Headers</a>
+            <a href="#firma">Firma</a>
+            <a href="#registro">Registro del webhook</a>
+            <a href="#procesamiento">Procesamiento</a>
+            <a href="#payment-created">payment.created</a>
+            <a href="#preapproval">preapproval</a>
+            <a href="#estado-interno">Estado interno</a>
+            <a href="#idempotencia">Idempotencia</a>
+            <a href="#errores">Errores comunes</a>
+            <a href="#studio">Qué mirar en la UI</a>
+            <a href="#produccion">En producción</a>
+            <a href="#checklist">Checklist</a>
+        </aside>
+
+        <main class="docs-content">
+            <h1 id="objetivo">Webhooks y estado interno en StreamBox Demo</h1>
+
+            <p>
+                Esta guía explica cómo StreamBox Demo recibe webhooks desde Mock Payment Service,
+                cómo valida que el evento sea confiable y cómo actualiza su propio estado interno.
+            </p>
+
+            <p>
+                La idea principal es que StreamBox representa una aplicación real. Por eso no alcanza con
+                que Mock Payment Service diga que un pago ocurrió: StreamBox necesita registrar el evento,
+                validar la firma, consultar al proveedor y actualizar sus propias suscripciones y pagos.
+            </p>
+
+            <div class="docs-callout">
+                El webhook se trata como un aviso. StreamBox no debería confiar ciegamente en el body recibido.
+                Después de validar la firma, consulta a Mock Payment Service para obtener el recurso actualizado.
+            </div>
+
+            <h2 id="idea-central">Idea central</h2>
+
+            <pre><code>Mock Payment Service
+  ↓ envía webhook firmado
+StreamBox Demo
+  ↓ valida firma
+StreamBox Demo
+  ↓ registra webhook recibido
+StreamBox Demo
+  ↓ consulta pago o suscripción al proveedor
+StreamBox Demo
+  ↓ actualiza estado interno
+StreamBox Demo
+  ↓ registra eventos educativos</code></pre>
+
+            <p>
+                Esto permite que StreamBox tenga una vista propia del mundo:
+            </p>
+
+            <ul>
+                <li>Suscripciones internas.</li>
+                <li>Pagos internos.</li>
+                <li>Webhooks recibidos.</li>
+                <li>Eventos internos.</li>
+            </ul>
+
+            <h2 id="flujo">Flujo completo</h2>
+
+            <p>
+                Un flujo típico de pago aprobado funciona así:
+            </p>
+
+            <pre><code>1. El usuario elige un plan en StreamBox.
+2. StreamBox crea una suscripción interna PENDING.
+3. StreamBox llama a Mock Payment Service y crea una preapproval.
+4. Mock Payment Service devuelve providerSubscriptionId.
+5. StreamBox guarda providerSubscriptionId.
+6. StreamBox simula el pago con tarjeta ficticia.
+7. Mock Payment Service crea un payment.
+8. Mock Payment Service envía webhook a StreamBox.
+9. StreamBox recibe el webhook.
+10. StreamBox valida x-signature.
+11. StreamBox registra DemoReceivedWebhook.
+12. StreamBox consulta GET /payment/{id}.
+13. StreamBox consulta GET /preapproval/{id}.
+14. StreamBox crea o actualiza DemoPayment.
+15. StreamBox actualiza DemoSubscription.
+16. StreamBox marca el webhook como procesado.</code></pre>
+
+            <h2 id="endpoint">Endpoint receptor</h2>
+
+            <p>
+                StreamBox recibe webhooks en este endpoint:
+            </p>
+
+            <pre><code>POST /api/webhooks/mock-payment</code></pre>
+
+            <p>
+                Cuando StreamBox corre en Docker, Mock Payment Service debe llamar a:
+            </p>
+
+            <pre><code>http://subscription-demo-app:8080/api/webhooks/mock-payment</code></pre>
+
+            <p>
+                Cuando StreamBox corre directamente en la máquina host y Mock Payment Service corre en Docker,
+                el webhook debería apuntar a:
+            </p>
+
+            <pre><code>http://host.docker.internal:8080/api/webhooks/mock-payment</code></pre>
+
+            <div class="docs-callout">
+                Si ambos servicios corren en Docker, no uses <code>localhost</code> para el webhook.
+                Desde el contenedor de Mock Payment Service, <code>localhost</code> significa el propio contenedor
+                del mock, no StreamBox.
+            </div>
+
+            <h2 id="headers">Headers esperados</h2>
+
+            <p>
+                Mock Payment Service envía dos headers importantes:
+            </p>
+
+            <pre><code>x-request-id
+x-signature</code></pre>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Header</th>
+                    <th>Uso en StreamBox</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>x-request-id</code></td>
+                    <td>Identifica la entrega y participa en el cálculo de la firma.</td>
+                </tr>
+                <tr>
+                    <td><code>x-signature</code></td>
+                    <td>Permite validar que el webhook fue firmado con el secret compartido.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h2 id="firma">Validación de firma</h2>
+
+            <p>
+                StreamBox usa el mismo secret que Mock Payment Service:
+            </p>
+
+            <pre><code>MOCK_PAYMENT_WEBHOOK_SECRET=dev-secret</code></pre>
+
+            <p>
+                La firma tiene este formato:
+            </p>
+
+            <pre><code>ts={timestamp},v1={hash}</code></pre>
+
+            <p>
+                El hash se calcula sobre este manifest:
+            </p>
+
+            <pre><code>id:{data.id};request-id:{x-request-id};ts:{timestamp};</code></pre>
+
+            <p>
+                Ejemplo:
+            </p>
+
+            <pre><code>id:mock-payment-1;request-id:a55b9e5d-c85d-4f68-aa74-2eec788e2eb4;ts:1778212356;</code></pre>
+
+            <h3>Qué valida StreamBox</h3>
+
+            <ol>
+                <li>Que exista <code>data.id</code>.</li>
+                <li>Que exista <code>x-request-id</code>.</li>
+                <li>Que exista <code>x-signature</code>.</li>
+                <li>Que el header tenga <code>ts</code>.</li>
+                <li>Que el header tenga <code>v1</code>.</li>
+                <li>Que el timestamp sea un número válido.</li>
+                <li>Que el hash calculado coincida con el hash recibido.</li>
+            </ol>
+
+            <h2 id="registro">Registro del webhook recibido</h2>
+
+            <p>
+                StreamBox guarda cada webhook recibido como un registro interno.
+            </p>
+
+            <pre><code>DemoReceivedWebhook</code></pre>
+
+            <p>
+                Ese registro guarda:
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Campo</th>
+                    <th>Uso</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>id</code></td>
+                    <td>ID interno del webhook recibido.</td>
+                </tr>
+                <tr>
+                    <td><code>requestId</code></td>
+                    <td>ID de entrega enviado por Mock Payment Service.</td>
+                </tr>
+                <tr>
+                    <td><code>signature</code></td>
+                    <td>Firma recibida en el header.</td>
+                </tr>
+                <tr>
+                    <td><code>type</code></td>
+                    <td>Tipo de evento: <code>payment</code> o <code>preapproval</code>.</td>
+                </tr>
+                <tr>
+                    <td><code>action</code></td>
+                    <td>Acción del evento, por ejemplo <code>payment.created</code>.</td>
+                </tr>
+                <tr>
+                    <td><code>dataId</code></td>
+                    <td>ID del recurso externo afectado.</td>
+                </tr>
+                <tr>
+                    <td><code>validSignature</code></td>
+                    <td>Indica si la firma fue válida.</td>
+                </tr>
+                <tr>
+                    <td><code>processed</code></td>
+                    <td>Indica si StreamBox pudo procesar el evento.</td>
+                </tr>
+                <tr>
+                    <td><code>error</code></td>
+                    <td>Mensaje de error si el procesamiento falló.</td>
+                </tr>
+                <tr>
+                    <td><code>receivedAt</code></td>
+                    <td>Fecha de recepción.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h2 id="procesamiento">Procesamiento del webhook</h2>
+
+            <p>
+                Una vez validada la firma, StreamBox delega el procesamiento al servicio de suscripciones.
+            </p>
+
+            <pre><code>subscriptionService.processWebhook(payload);</code></pre>
+
+            <p>
+                El servicio distingue dos grandes tipos de eventos:
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>type</th>
+                    <th>action</th>
+                    <th>Qué hace StreamBox</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>payment</code></td>
+                    <td><code>payment.created</code></td>
+                    <td>Consulta el pago, guarda pago interno y actualiza suscripción.</td>
+                </tr>
+                <tr>
+                    <td><code>preapproval</code></td>
+                    <td><code>preapproval.updated</code></td>
+                    <td>Consulta la suscripción externa y actualiza la suscripción interna.</td>
+                </tr>
+                <tr>
+                    <td><code>preapproval</code></td>
+                    <td><code>preapproval.cancelled</code></td>
+                    <td>Consulta la suscripción externa y marca la suscripción interna como cancelada.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h2 id="payment-created">Evento payment.created</h2>
+
+            <p>
+                Cuando llega un evento:
+            </p>
+
+            <pre><code>type=payment
+action=payment.created</code></pre>
+
+            <p>
+                StreamBox usa <code>data.id</code> como ID externo del pago.
+            </p>
+
+            <pre><code>data.id = mock-payment-1</code></pre>
+
+            <p>
+                Luego consulta:
+            </p>
+
+            <pre><code>GET /payment/mock-payment-1</code></pre>
+
+            <p>
+                Con la respuesta del proveedor:
+            </p>
+
+            <ol>
+                <li>Obtiene el <code>preapprovalId</code> asociado al pago.</li>
+                <li>Busca la suscripción interna por <code>providerSubscriptionId</code>.</li>
+                <li>Guarda el pago interno si todavía no existe.</li>
+                <li>Consulta la suscripción externa actualizada.</li>
+                <li>Mapea el estado externo a estado interno.</li>
+                <li>Actualiza la suscripción interna.</li>
+            </ol>
+
+            <pre><code>provider payment id
+  ↓
+provider preapproval id
+  ↓
+internal subscription
+  ↓
+internal payment
+  ↓
+internal subscription status</code></pre>
+
+            <h2 id="preapproval">Eventos preapproval</h2>
+
+            <p>
+                Cuando llega un evento de suscripción externa:
+            </p>
+
+            <pre><code>type=preapproval</code></pre>
+
+            <p>
+                StreamBox usa <code>data.id</code> como ID externo de la suscripción.
+            </p>
+
+            <pre><code>data.id = mock-preapproval-1</code></pre>
+
+            <p>
+                Luego consulta:
+            </p>
+
+            <pre><code>GET /preapproval/mock-preapproval-1</code></pre>
+
+            <p>
+                Con esa respuesta:
+            </p>
+
+            <ol>
+                <li>Busca la suscripción interna por <code>providerSubscriptionId</code>.</li>
+                <li>Mapea el estado externo.</li>
+                <li>Actualiza la suscripción interna.</li>
+                <li>Registra un evento educativo.</li>
+            </ol>
+
+            <h2 id="estado-interno">Mapeo de estado interno</h2>
+
+            <p>
+                Mock Payment Service tiene sus propios estados. StreamBox los convierte a estados internos.
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Estado del proveedor</th>
+                    <th>Estado interno en StreamBox</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>pending</code></td>
+                    <td><code>PENDING</code></td>
+                </tr>
+                <tr>
+                    <td><code>authorized</code></td>
+                    <td><code>ACTIVE</code></td>
+                </tr>
+                <tr>
+                    <td><code>payment_failed</code></td>
+                    <td><code>PAYMENT_FAILED</code></td>
+                </tr>
+                <tr>
+                    <td><code>paused</code></td>
+                    <td><code>PAUSED</code></td>
+                </tr>
+                <tr>
+                    <td><code>cancelled</code></td>
+                    <td><code>CANCELLED</code></td>
+                </tr>
+                </tbody>
+            </table>
+
+            <p>
+                También mapea estados de pago:
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Estado del proveedor</th>
+                    <th>Estado interno en StreamBox</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>approved</code></td>
+                    <td><code>APPROVED</code></td>
+                </tr>
+                <tr>
+                    <td><code>rejected</code></td>
+                    <td><code>REJECTED</code></td>
+                </tr>
+                <tr>
+                    <td><code>in_process</code></td>
+                    <td><code>IN_PROCESS</code></td>
+                </tr>
+                <tr>
+                    <td>Otro valor</td>
+                    <td><code>UNKNOWN</code></td>
+                </tr>
+                </tbody>
+            </table>
+
+            <div class="docs-callout">
+                Este mapeo es una práctica importante. Una aplicación real no debería depender en todo su código
+                del vocabulario exacto de una pasarela externa.
+            </div>
+
+            <h2 id="idempotencia">Idempotencia</h2>
+
+            <p>
+                Un webhook puede llegar más de una vez. Por eso StreamBox evita duplicar pagos usando el ID externo.
+            </p>
+
+            <pre><code>findPaymentByProviderPaymentId(providerPayment.id())</code></pre>
+
+            <p>
+                Si el pago ya existe, no crea otro pago interno.
+            </p>
+
+            <pre><code>Webhook repetido
+  ↓
+Mismo providerPaymentId
+  ↓
+No duplicar DemoPayment</code></pre>
+
+            <p>
+                Esta idea es clave para producción. En un sistema real conviene reforzarla con constraints
+                únicos en base de datos.
+            </p>
+
+            <pre><code>UNIQUE(provider_payment_id)
+UNIQUE(provider_event_id)
+UNIQUE(request_id)</code></pre>
+
+            <h2 id="errores">Errores comunes</h2>
+
+            <h3>Firma inválida</h3>
+
+            <p>
+                Causa frecuente:
+            </p>
+
+            <pre><code>MOCK_PAYMENT_WEBHOOK_SECRET diferente entre StreamBox y Mock Payment Service</code></pre>
+
+            <p>
+                Ambos deben usar el mismo valor:
+            </p>
+
+            <pre><code>MOCK_PAYMENT_WEBHOOK_SECRET=dev-secret</code></pre>
+
+            <h3>Webhook no llega</h3>
+
+            <p>
+                Si Mock Payment Studio muestra <code>delivered=false</code>, revisar el webhook URL generado
+                por StreamBox.
+            </p>
+
+            <p>
+                Si ambos servicios corren en Docker, debe ser:
+            </p>
+
+            <pre><code>http://subscription-demo-app:8080/api/webhooks/mock-payment</code></pre>
+
+            <p>
+                No:
+            </p>
+
+            <pre><code>http://localhost:8080/api/webhooks/mock-payment</code></pre>
+
+            <h3>Webhook llega pero no se procesa</h3>
+
+            <p>
+                Revisar la tabla:
+            </p>
+
+            <pre><code>Webhooks recibidos por StreamBox</code></pre>
+
+            <p>
+                Ahí se puede ver:
+            </p>
+
+            <ul>
+                <li>Si la firma fue válida.</li>
+                <li>Si fue procesado.</li>
+                <li>Qué error ocurrió.</li>
+                <li>Qué <code>type</code>, <code>action</code> y <code>dataId</code> llegaron.</li>
+            </ul>
+
+            <h3>No encuentra suscripción interna</h3>
+
+            <p>
+                Puede pasar si Mock Payment Service envía un webhook de una preapproval que StreamBox
+                no creó o no tiene registrada.
+            </p>
+
+            <pre><code>Internal subscription not found for provider subscription</code></pre>
+
+            <p>
+                En producción, este tipo de error debería quedar registrado para investigación.
+            </p>
+
+            <h2 id="studio">Qué mirar en la UI de StreamBox</h2>
+
+            <p>
+                Después de una prueba con pago y webhook, revisar estas secciones:
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Sección</th>
+                    <th>Qué muestra</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>Suscripciones internas</td>
+                    <td>Estado interno de cada suscripción.</td>
+                </tr>
+                <tr>
+                    <td>Pagos internos</td>
+                    <td>Pagos registrados luego de consultar al proveedor.</td>
+                </tr>
+                <tr>
+                    <td>Webhooks recibidos por StreamBox</td>
+                    <td>Firma, procesamiento, error y metadata del webhook.</td>
+                </tr>
+                <tr>
+                    <td>Eventos internos</td>
+                    <td>Historia educativa de lo que hizo StreamBox.</td>
+                </tr>
+                <tr>
+                    <td>Configuración de integración</td>
+                    <td>URLs y secret usados para integrarse con el mock.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h2 id="produccion">Qué cambiar en producción</h2>
+
+            <p>
+                El patrón de StreamBox sirve como referencia, pero en una aplicación real conviene reforzarlo.
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>En StreamBox Demo</th>
+                    <th>En producción</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>DemoStore</td>
+                    <td>Base de datos con transacciones.</td>
+                </tr>
+                <tr>
+                    <td>Listas y maps en memoria</td>
+                    <td>Repositorios, constraints e índices.</td>
+                </tr>
+                <tr>
+                    <td>Validación HMAC del mock</td>
+                    <td>Validación oficial de la pasarela real.</td>
+                </tr>
+                <tr>
+                    <td>Eventos internos simples</td>
+                    <td>Auditoría y logs estructurados.</td>
+                </tr>
+                <tr>
+                    <td>Idempotencia básica por providerPaymentId</td>
+                    <td>Idempotencia reforzada en base de datos.</td>
+                </tr>
+                <tr>
+                    <td>Estados simplificados</td>
+                    <td>Estados de dominio completos y reglas de negocio.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h2 id="checklist">Checklist para probar webhooks</h2>
+
+            <ol>
+                <li>Mock Payment Service está levantado.</li>
+                <li>StreamBox Demo está levantado.</li>
+                <li>Ambos servicios comparten red Docker si corren en contenedores.</li>
+                <li><code>MOCK_PAYMENT_BASE_URL</code> apunta a <code>http://mock-payment-service:9090</code>.</li>
+                <li><code>DEMO_APP_WEBHOOK_BASE_URL</code> apunta a <code>http://subscription-demo-app:8080</code>.</li>
+                <li>El secret coincide en ambos servicios.</li>
+                <li>Se creó una suscripción desde StreamBox.</li>
+                <li>Se pagó con tarjeta ficticia.</li>
+                <li>Mock Payment Studio muestra <code>delivered=true</code>.</li>
+                <li>StreamBox muestra el webhook recibido.</li>
+                <li>La firma aparece válida.</li>
+                <li>El webhook aparece procesado.</li>
+                <li>La suscripción interna cambió de estado.</li>
+                <li>El pago interno fue registrado.</li>
+            </ol>
+
+            <div class="docs-callout">
+                Si todo esto se cumple, el flujo de webhooks entre Mock Payment Service y StreamBox Demo
+                está funcionando correctamente.
+            </div>
+        </main>
+    </div>
+</div>
+</body>
+</html>

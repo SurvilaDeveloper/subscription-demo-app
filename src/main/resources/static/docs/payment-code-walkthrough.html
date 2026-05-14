@@ -1,0 +1,971 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Recorrido del código de pagos · StreamBox Demo</title>
+    <link rel="stylesheet" href="./docs.css" />
+</head>
+<body>
+<div class="docs-shell">
+    <header class="docs-header">
+        <div class="docs-brand">
+            <h1>Recorrido del código de pagos</h1>
+        </div>
+
+        <nav class="docs-actions" aria-label="Acciones">
+            <a class="docs-button" href="./index.html">Docs</a>
+            <a class="docs-button" href="../index.html">StreamBox</a>
+        </nav>
+    </header>
+
+    <div class="docs-layout">
+        <aside class="docs-toc">
+            <strong>Contenido</strong>
+            <a href="#objetivo">Objetivo</a>
+            <a href="#mapa">Mapa general</a>
+            <a href="#cliente">MockPaymentClient</a>
+            <a href="#servicio">SubscriptionService</a>
+            <a href="#crear">Crear y pagar suscripción</a>
+            <a href="#recurrente">Cobro recurrente</a>
+            <a href="#plan">Cambio de plan</a>
+            <a href="#cancelacion">Cancelación</a>
+            <a href="#webhook-controller">Webhook controller</a>
+            <a href="#firma">Validación de firma</a>
+            <a href="#procesamiento-webhook">Procesamiento de webhook</a>
+            <a href="#modelos">Modelos internos</a>
+            <a href="#store">DemoStore</a>
+            <a href="#produccion">Qué cambiar en producción</a>
+            <a href="#resumen">Resumen</a>
+        </aside>
+
+        <main class="docs-content">
+            <h1 id="objetivo">Recorrido del código de pagos</h1>
+
+            <p>
+                Esta guía muestra el código principal que usa StreamBox Demo para integrarse con
+                Mock Payment Service. Está pensada para poder entender la integración incluso si la
+                aplicación se ejecuta desde una imagen Docker y no se abre el proyecto en un IDE.
+            </p>
+
+            <div class="docs-callout">
+                Esta página no reemplaza el código fuente. Es un recorrido educativo: muestra los fragmentos
+                más importantes, explica qué hace cada pieza y señala qué partes conviene adaptar en un
+                proyecto real.
+            </div>
+
+            <h2 id="mapa">Mapa general del flujo</h2>
+
+            <pre><code>Usuario elige plan y tarjeta ficticia
+  ↓
+SubscriptionService.startSubscription(...)
+  ↓
+Crea DemoSubscription interna en PENDING
+  ↓
+MockPaymentClient.createPreapproval(...)
+  ↓
+Guarda providerSubscriptionId
+  ↓
+MockPaymentClient.payWithCard(...)
+  ↓
+Guarda DemoPayment interno
+  ↓
+Mock Payment Service envía webhook
+  ↓
+MockPaymentWebhookController.receiveWebhook(...)
+  ↓
+WebhookSignatureVerifier.verifyOrThrow(...)
+  ↓
+SubscriptionService.processWebhook(...)
+  ↓
+Consulta GET /payment/{id} y GET /preapproval/{id}
+  ↓
+Actualiza estado interno</code></pre>
+
+            <p>
+                La idea central es que StreamBox no confía solamente en el resultado visual del pago.
+                También mantiene su propio estado interno, guarda IDs externos del proveedor, recibe webhooks,
+                valida firma y consulta al proveedor para confirmar el estado actualizado.
+            </p>
+
+            <h2 id="cliente">1. MockPaymentClient.java</h2>
+
+            <p>
+                Este archivo concentra las llamadas HTTP hacia Mock Payment Service. Es una capa de integración
+                con el proveedor simulado.
+            </p>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/client/MockPaymentClient.java</code></pre>
+
+            <p>
+                La clase usa <code>RestClient</code> y recibe la URL base desde configuración:
+            </p>
+
+            <pre><code>@Component
+public class MockPaymentClient {
+
+    private final RestClient restClient;
+
+    public MockPaymentClient(
+            @Value("${demo-app.mock-payment.base-url:http://localhost:9090}") String baseUrl
+    ) {
+        this.restClient = RestClient.builder()
+                .baseUrl(baseUrl)
+                .build();
+    }
+}</code></pre>
+
+            <h3>Por qué existe esta clase</h3>
+
+            <p>
+                Para que el resto de la aplicación no tenga que conocer URLs, endpoints ni detalles HTTP
+                del proveedor. En vez de llamar al mock desde cualquier servicio o controller, todo pasa
+                por una clase dedicada.
+            </p>
+
+            <pre><code>SubscriptionService
+  ↓
+MockPaymentClient
+  ↓
+Mock Payment Service</code></pre>
+
+            <h3>Métodos principales</h3>
+
+            <pre><code>public MockPreapprovalResponse createPreapproval(MockCreatePreapprovalRequest request) {
+    return restClient.post()
+            .uri("/preapproval")
+            .body(request)
+            .retrieve()
+            .body(MockPreapprovalResponse.class);
+}
+
+public MockPaymentResponse getPayment(String id) {
+    return restClient.get()
+            .uri("/payment/{id}", id)
+            .retrieve()
+            .body(MockPaymentResponse.class);
+}
+
+public MockPayWithCardResponse payWithCard(String preapprovalId, MockPayWithCardRequest request) {
+    return restClient.post()
+            .uri("/mock/preapproval/{id}/pay-with-card", preapprovalId)
+            .body(request)
+            .retrieve()
+            .body(MockPayWithCardResponse.class);
+}</code></pre>
+
+            <h3>Qué representa en una app real</h3>
+
+            <p>
+                En una aplicación real esta clase podría reemplazarse por:
+            </p>
+
+            <pre><code>MercadoPagoClient
+StripeClient
+PayPalClient
+PaymentProviderClient</code></pre>
+
+            <p>
+                La idea importante no es el nombre <code>MockPaymentClient</code>, sino el patrón:
+                aislar el código que habla con la pasarela.
+            </p>
+
+            <h2 id="servicio">2. SubscriptionService.java</h2>
+
+            <p>
+                Este es el corazón del flujo de pagos de StreamBox Demo.
+            </p>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/service/SubscriptionService.java</code></pre>
+
+            <p>
+                El servicio recibe el store interno, el catálogo de planes, el cliente del mock y dos URLs
+                configurables: la URL pública de StreamBox y la URL base para recibir webhooks.
+            </p>
+
+            <pre><code>@Service
+public class SubscriptionService {
+
+    private final DemoStore store;
+    private final PlanCatalogService planCatalogService;
+    private final MockPaymentClient mockPaymentClient;
+    private final String publicBaseUrl;
+    private final String webhookBaseUrl;
+
+    public SubscriptionService(
+            DemoStore store,
+            PlanCatalogService planCatalogService,
+            MockPaymentClient mockPaymentClient,
+            @Value("${demo-app.public-base-url:http://localhost:8080}") String publicBaseUrl,
+            @Value("${demo-app.webhook-base-url:http://localhost:8080}") String webhookBaseUrl
+    ) {
+        this.store = store;
+        this.planCatalogService = planCatalogService;
+        this.mockPaymentClient = mockPaymentClient;
+        this.publicBaseUrl = publicBaseUrl;
+        this.webhookBaseUrl = webhookBaseUrl;
+    }
+}</code></pre>
+
+            <h3>Por qué existe este servicio</h3>
+
+            <p>
+                Porque la integración de pagos no es solo “llamar a un endpoint”. Hay que orquestar varias cosas:
+            </p>
+
+            <ul>
+                <li>Validar el plan.</li>
+                <li>Crear estado interno.</li>
+                <li>Llamar al proveedor.</li>
+                <li>Guardar IDs externos.</li>
+                <li>Simular o procesar pagos.</li>
+                <li>Guardar pagos internos.</li>
+                <li>Procesar webhooks.</li>
+                <li>Mapear estados externos a estados internos.</li>
+            </ul>
+
+            <h2 id="crear">3. Crear y pagar una suscripción</h2>
+
+            <p>
+                El método <code>startSubscription</code> representa el flujo inicial cuando el usuario elige
+                un plan y paga.
+            </p>
+
+            <pre><code>public StartSubscriptionResponse startSubscription(StartSubscriptionRequest request) {
+    Plan plan = planCatalogService.findById(request.planId())
+            .orElseThrow(() -> new BadRequestException("Plan not found: " + request.planId()));
+
+    Instant now = Instant.now();
+
+    DemoSubscription subscription = new DemoSubscription(
+            store.nextSubscriptionId(),
+            plan.id(),
+            plan.name(),
+            plan.amount(),
+            plan.currency(),
+            request.payerEmail(),
+            null,
+            SubscriptionStatus.PENDING,
+            now,
+            now
+    );
+
+    store.saveSubscription(subscription);
+
+    MockPreapprovalResponse preapproval = mockPaymentClient.createPreapproval(
+            buildCreatePreapprovalRequest(subscription)
+    );
+
+    subscription.setProviderSubscriptionId(preapproval.id());
+    store.saveSubscription(subscription);
+
+    MockPayWithCardResponse payResponse = mockPaymentClient.payWithCard(
+            preapproval.id(),
+            buildPayWithCardRequest(request.cardNumber())
+    );
+
+    subscription.setStatus(mapPreapprovalStatus(payResponse.preapprovalStatus()));
+    store.saveSubscription(subscription);
+
+    DemoPayment payment = savePaymentIfMissing(
+            subscription.getId(),
+            payResponse.payment()
+    );
+
+    return new StartSubscriptionResponse(
+            subscription,
+            payment,
+            preapproval.id(),
+            payResponse.payment().id(),
+            payResponse.preapprovalStatus(),
+            payResponse.payment().status()
+    );
+}</code></pre>
+
+            <h3>Qué está pasando paso a paso</h3>
+
+            <ol>
+                <li>Busca el plan elegido.</li>
+                <li>Crea una suscripción interna en estado <code>PENDING</code>.</li>
+                <li>Guarda la suscripción en el store.</li>
+                <li>Llama a Mock Payment Service para crear una preapproval.</li>
+                <li>Guarda el ID externo del proveedor en <code>providerSubscriptionId</code>.</li>
+                <li>Simula el pago con tarjeta ficticia.</li>
+                <li>Mapea el estado del proveedor a un estado interno.</li>
+                <li>Guarda el pago interno si todavía no existe.</li>
+                <li>Devuelve una respuesta educativa con datos internos y externos.</li>
+            </ol>
+
+            <h3>Pedido enviado al proveedor</h3>
+
+            <p>
+                StreamBox arma el request hacia Mock Payment Service con el plan, email, monto,
+                moneda, URL pública y endpoint de webhook:
+            </p>
+
+            <pre><code>private MockCreatePreapprovalRequest buildCreatePreapprovalRequest(DemoSubscription subscription) {
+    return new MockCreatePreapprovalRequest(
+            subscription.getPlanName(),
+            "demo_subscription_id=" + subscription.getId(),
+            subscription.getPayerEmail(),
+            new MockCreatePreapprovalRequest.AutoRecurringRequest(
+                    1,
+                    "months",
+                    subscription.getAmount(),
+                    subscription.getCurrency()
+            ),
+            publicBaseUrl,
+            webhookBaseUrl + "/api/webhooks/mock-payment"
+    );
+}</code></pre>
+
+            <p>
+                La parte clave es:
+            </p>
+
+            <pre><code>webhookBaseUrl + "/api/webhooks/mock-payment"</code></pre>
+
+            <p>
+                Esa URL es donde Mock Payment Service va a enviar los webhooks.
+            </p>
+
+            <h2 id="recurrente">4. Simular cobro recurrente</h2>
+
+            <p>
+                Este método representa un pago posterior sobre una suscripción existente.
+            </p>
+
+            <pre><code>public SubscriptionActionResponse simulateRecurringCharge(
+        String subscriptionId,
+        SimulateRecurringChargeRequest request
+) {
+    DemoSubscription subscription = getSubscriptionOrThrow(subscriptionId);
+
+    ensureProviderSubscription(subscription);
+
+    MockPayWithCardResponse response = mockPaymentClient.simulateRecurringCharge(
+            subscription.getProviderSubscriptionId(),
+            new MockSimulateRecurringChargeRequest(
+                    request.cardNumber(),
+                    true
+            )
+    );
+
+    subscription.setStatus(mapPreapprovalStatus(response.preapprovalStatus()));
+    store.saveSubscription(subscription);
+
+    DemoPayment payment = savePaymentIfMissing(
+            subscription.getId(),
+            response.payment()
+    );
+
+    return new SubscriptionActionResponse(
+            subscription,
+            payment,
+            subscription.getProviderSubscriptionId(),
+            response.payment().id(),
+            response.preapprovalStatus(),
+            response.payment().status()
+    );
+}</code></pre>
+
+            <h3>Qué enseña este método</h3>
+
+            <p>
+                Una suscripción no termina en el alta inicial. En sistemas reales puede haber renovaciones,
+                cobros mensuales, pagos fallidos y cambios de estado posteriores.
+            </p>
+
+            <h2 id="plan">5. Cambiar plan</h2>
+
+            <p>
+                El método <code>changePlan</code> muestra cómo StreamBox cambia el plan interno y también
+                informa el cambio al proveedor simulado.
+            </p>
+
+            <pre><code>public SubscriptionActionResponse changePlan(
+        String subscriptionId,
+        ChangeSubscriptionPlanRequest request
+) {
+    DemoSubscription subscription = getSubscriptionOrThrow(subscriptionId);
+
+    ensureProviderSubscription(subscription);
+
+    Plan newPlan = planCatalogService.findById(request.planId())
+            .orElseThrow(() -> new BadRequestException("Plan not found: " + request.planId()));
+
+    mockPaymentClient.changePlan(
+            subscription.getProviderSubscriptionId(),
+            new MockChangePlanRequest(
+                    newPlan.name(),
+                    new MockCreatePreapprovalRequest.AutoRecurringRequest(
+                            1,
+                            "months",
+                            newPlan.amount(),
+                            newPlan.currency()
+                    ),
+                    true
+            )
+    );
+
+    MockPreapprovalResponse providerPreapproval = mockPaymentClient.getPreapproval(
+            subscription.getProviderSubscriptionId()
+    );
+
+    subscription.replacePlan(newPlan);
+    subscription.setStatus(mapPreapprovalStatus(providerPreapproval.status()));
+    store.saveSubscription(subscription);
+
+    return new SubscriptionActionResponse(
+            subscription,
+            null,
+            subscription.getProviderSubscriptionId(),
+            null,
+            providerPreapproval.status(),
+            null
+    );
+}</code></pre>
+
+            <h3>Por qué consulta al proveedor después del cambio</h3>
+
+            <p>
+                Después de pedir el cambio, StreamBox consulta la preapproval actualizada. Esa es una idea muy buena:
+                ante un cambio importante, no conviene asumir el estado final solamente por haber llamado al endpoint.
+            </p>
+
+            <h2 id="cancelacion">6. Cancelar suscripción</h2>
+
+            <p>
+                Este método cancela la suscripción en el proveedor y luego consulta el estado actualizado.
+            </p>
+
+            <pre><code>public SubscriptionActionResponse cancelSubscription(String subscriptionId) {
+    DemoSubscription subscription = getSubscriptionOrThrow(subscriptionId);
+
+    ensureProviderSubscription(subscription);
+
+    mockPaymentClient.cancelPreapproval(
+            subscription.getProviderSubscriptionId(),
+            new MockSubscriptionActionRequest(true)
+    );
+
+    MockPreapprovalResponse providerPreapproval = mockPaymentClient.getPreapproval(
+            subscription.getProviderSubscriptionId()
+    );
+
+    subscription.setStatus(mapPreapprovalStatus(providerPreapproval.status()));
+    store.saveSubscription(subscription);
+
+    return new SubscriptionActionResponse(
+            subscription,
+            null,
+            subscription.getProviderSubscriptionId(),
+            null,
+            providerPreapproval.status(),
+            null
+    );
+}</code></pre>
+
+            <h3>Qué enseña este método</h3>
+
+            <p>
+                La cancelación debe quedar reflejada en los dos lados:
+            </p>
+
+            <pre><code>Aplicación principal
+Proveedor de pagos</code></pre>
+
+            <p>
+                En producción, este flujo podría incluir permisos, reglas de negocio, fecha de fin de ciclo,
+                prorrateos, reembolsos o retención de acceso hasta el final del período pago.
+            </p>
+
+            <h2 id="webhook-controller">7. MockPaymentWebhookController.java</h2>
+
+            <p>
+                Este controller recibe los webhooks que Mock Payment Service envía hacia StreamBox.
+            </p>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/controller/MockPaymentWebhookController.java</code></pre>
+
+            <pre><code>@RestController
+@RequestMapping("/api/webhooks/mock-payment")
+public class MockPaymentWebhookController {
+
+    private final WebhookSignatureVerifier signatureVerifier;
+    private final SubscriptionService subscriptionService;
+    private final DemoStore store;
+
+    @PostMapping
+    public ResponseEntity&lt;Void&gt; receiveWebhook(
+            @RequestHeader(value = "x-request-id", required = false) String requestId,
+            @RequestHeader(value = "x-signature", required = false) String signature,
+            @RequestBody(required = false) MockPaymentWebhookPayload payload
+    ) {
+        ...
+    }
+}</code></pre>
+
+            <h3>Qué hace este controller</h3>
+
+            <ol>
+                <li>Recibe el webhook.</li>
+                <li>Extrae <code>x-request-id</code>.</li>
+                <li>Extrae <code>x-signature</code>.</li>
+                <li>Extrae <code>type</code>, <code>action</code> y <code>data.id</code>.</li>
+                <li>Valida la firma.</li>
+                <li>Guarda el webhook recibido.</li>
+                <li>Delega el procesamiento a <code>SubscriptionService</code>.</li>
+                <li>Marca el webhook como procesado o fallido.</li>
+            </ol>
+
+            <h3>Fragmento clave</h3>
+
+            <pre><code>signatureVerifier.verifyOrThrow(
+        dataId,
+        requestId,
+        signature
+);
+
+receivedWebhook = new DemoReceivedWebhook(
+        store.nextReceivedWebhookId(),
+        requestId,
+        signature,
+        type,
+        action,
+        dataId,
+        true,
+        false,
+        null,
+        Instant.now()
+);
+
+store.saveReceivedWebhook(receivedWebhook);
+
+subscriptionService.processWebhook(payload);
+
+receivedWebhook.markProcessed();
+store.saveReceivedWebhook(receivedWebhook);
+
+return ResponseEntity.ok().build();</code></pre>
+
+            <h3>Por qué está bien separado</h3>
+
+            <p>
+                El controller no resuelve toda la lógica de negocio. Su trabajo es recibir HTTP,
+                validar seguridad básica, registrar el evento y delegar.
+            </p>
+
+            <pre><code>Controller
+  ↓
+WebhookSignatureVerifier
+  ↓
+SubscriptionService
+  ↓
+DemoStore / MockPaymentClient</code></pre>
+
+            <h2 id="firma">8. WebhookSignatureVerifier.java</h2>
+
+            <p>
+                Esta clase verifica que el webhook recibido realmente haya sido firmado con el secret compartido.
+            </p>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/service/WebhookSignatureVerifier.java</code></pre>
+
+            <pre><code>@Component
+public class WebhookSignatureVerifier {
+
+    private final String webhookSecret;
+
+    public WebhookSignatureVerifier(
+            @Value("${demo-app.mock-payment.webhook-secret:dev-secret}") String webhookSecret
+    ) {
+        this.webhookSecret = webhookSecret;
+    }
+}</code></pre>
+
+            <h3>Validaciones principales</h3>
+
+            <pre><code>public void verifyOrThrow(String dataId, String requestId, String signatureHeader) {
+    if (dataId == null || dataId.isBlank()) {
+        throw new BadRequestException("Missing data.id in webhook payload.");
+    }
+
+    if (requestId == null || requestId.isBlank()) {
+        throw new BadRequestException("Missing x-request-id header.");
+    }
+
+    if (signatureHeader == null || signatureHeader.isBlank()) {
+        throw new BadRequestException("Missing x-signature header.");
+    }
+
+    String timestampValue = extractSignaturePart(signatureHeader, "ts");
+    String receivedHash = extractSignaturePart(signatureHeader, "v1");
+
+    ...
+}</code></pre>
+
+            <h3>Manifest firmado</h3>
+
+            <p>
+                La firma se calcula usando el mismo formato que Mock Payment Service:
+            </p>
+
+            <pre><code>private String createHash(String dataId, String requestId, long timestamp) {
+    String manifest = "id:%s;request-id:%s;ts:%d;"
+            .formatted(dataId, requestId, timestamp);
+
+    return hmacSha256Hex(webhookSecret, manifest);
+}</code></pre>
+
+            <h3>Comparación segura</h3>
+
+            <pre><code>boolean valid = MessageDigest.isEqual(
+        expectedHash.getBytes(StandardCharsets.UTF_8),
+        receivedHash.getBytes(StandardCharsets.UTF_8)
+);
+
+if (!valid) {
+    throw new BadRequestException("Invalid webhook signature.");
+}</code></pre>
+
+            <div class="docs-callout">
+                En producción, la validación exacta depende de la pasarela real. Mercado Pago, Stripe,
+                PayPal u otros proveedores pueden usar headers, secretos, certificados o esquemas distintos.
+                El patrón importante es no procesar webhooks sin validarlos.
+            </div>
+
+            <h2 id="procesamiento-webhook">9. Procesamiento de webhooks</h2>
+
+            <p>
+                Una vez validado el webhook, el controller llama a:
+            </p>
+
+            <pre><code>subscriptionService.processWebhook(payload);</code></pre>
+
+            <p>
+                El servicio distingue eventos de pago y eventos de suscripción:
+            </p>
+
+            <pre><code>public void processWebhook(MockPaymentWebhookPayload payload) {
+    if (payload == null || payload.data() == null || payload.data().id() == null) {
+        throw new BadRequestException("Invalid webhook payload.");
+    }
+
+    if ("payment".equals(payload.type()) && "payment.created".equals(payload.action())) {
+        processPaymentCreatedWebhook(payload.data().id());
+        return;
+    }
+
+    if ("preapproval".equals(payload.type())) {
+        processPreapprovalWebhook(payload.action(), payload.data().id());
+        return;
+    }
+
+    store.addEvent(
+            "WEBHOOK_IGNORED",
+            "Webhook ignored: unsupported type/action %s/%s."
+                    .formatted(payload.type(), payload.action())
+    );
+}</code></pre>
+
+            <h3>Webhook de pago</h3>
+
+            <p>
+                Para un pago, StreamBox no se queda solamente con el body del webhook. Consulta el pago
+                al proveedor:
+            </p>
+
+            <pre><code>private void processPaymentCreatedWebhook(String providerPaymentId) {
+    MockPaymentResponse providerPayment = mockPaymentClient.getPayment(providerPaymentId);
+
+    DemoSubscription subscription = store.findSubscriptionByProviderSubscriptionId(
+            providerPayment.preapprovalId()
+    ).orElseThrow(...);
+
+    DemoPayment payment = savePaymentIfMissing(subscription.getId(), providerPayment);
+
+    MockPreapprovalResponse providerPreapproval = mockPaymentClient.getPreapproval(
+            providerPayment.preapprovalId()
+    );
+
+    subscription.setStatus(mapPreapprovalStatus(providerPreapproval.status()));
+    store.saveSubscription(subscription);
+}</code></pre>
+
+            <h3>Idea clave</h3>
+
+            <pre><code>Webhook recibido
+  ↓
+Validar firma
+  ↓
+Consultar recurso actualizado al proveedor
+  ↓
+Actualizar estado interno</code></pre>
+
+            <p>
+                Esta es una de las ideas más importantes de toda la demo.
+            </p>
+
+            <h2 id="modelos">10. Modelos internos</h2>
+
+            <h3>DemoSubscription.java</h3>
+
+            <p>
+                Representa la suscripción interna de StreamBox.
+            </p>
+
+            <pre><code>public class DemoSubscription implements Serializable {
+
+    private final String id;
+    private String planId;
+    private String planName;
+    private BigDecimal amount;
+    private String currency;
+    private final String payerEmail;
+
+    private String providerSubscriptionId;
+    private SubscriptionStatus status;
+    private Instant createdAt;
+    private Instant updatedAt;
+}</code></pre>
+
+            <p>
+                Lo importante es que guarda dos tipos de datos:
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Dato</th>
+                    <th>Ejemplo</th>
+                    <th>Para qué sirve</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>ID interno</td>
+                    <td><code>demo-subscription-1</code></td>
+                    <td>Identificador propio de StreamBox.</td>
+                </tr>
+                <tr>
+                    <td>ID externo</td>
+                    <td><code>mock-preapproval-1</code></td>
+                    <td>Identificador de la suscripción en el proveedor.</td>
+                </tr>
+                <tr>
+                    <td>Estado interno</td>
+                    <td><code>ACTIVE</code></td>
+                    <td>Estado usado por la aplicación principal.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h3>DemoPayment.java</h3>
+
+            <p>
+                Representa un pago interno asociado a una suscripción.
+            </p>
+
+            <pre><code>public class DemoPayment implements Serializable {
+
+    private final String id;
+    private final String subscriptionId;
+    private final String providerPaymentId;
+    private final PaymentStatus status;
+    private final String statusDetail;
+    private final BigDecimal amount;
+    private final String currency;
+    private final Instant createdAt;
+}</code></pre>
+
+            <p>
+                La app guarda el ID del pago interno y también el ID externo devuelto por el proveedor.
+            </p>
+
+            <h3>DemoReceivedWebhook.java</h3>
+
+            <p>
+                Representa un webhook recibido por StreamBox.
+            </p>
+
+            <pre><code>public class DemoReceivedWebhook implements Serializable {
+
+    private final String id;
+    private final String requestId;
+    private final String signature;
+    private final String type;
+    private final String action;
+    private final String dataId;
+    private final boolean validSignature;
+    private boolean processed;
+    private String error;
+    private final Instant receivedAt;
+
+    public void markProcessed() {
+        this.processed = true;
+        this.error = null;
+    }
+
+    public void markFailed(String error) {
+        this.processed = false;
+        this.error = error;
+    }
+}</code></pre>
+
+            <p>
+                En producción, este modelo podría convertirse en una tabla de auditoría de webhooks.
+            </p>
+
+            <h2 id="store">11. DemoStore.java</h2>
+
+            <p>
+                <code>DemoStore</code> es el almacenamiento simple de la demo.
+                Guarda suscripciones, pagos, eventos y webhooks recibidos.
+            </p>
+
+            <pre><code>private final ConcurrentHashMap&lt;String, DemoSubscription&gt; subscriptions = new ConcurrentHashMap&lt;&gt;();
+private final ConcurrentHashMap&lt;String, DemoPayment&gt; payments = new ConcurrentHashMap&lt;&gt;();
+private final List&lt;DemoEvent&gt; events = new ArrayList&lt;&gt;();
+private final List&lt;DemoReceivedWebhook&gt; receivedWebhooks = new ArrayList&lt;&gt;();</code></pre>
+
+            <h3>IDs internos</h3>
+
+            <pre><code>public String nextSubscriptionId() {
+    return "demo-subscription-" + subscriptionSequence.getAndIncrement();
+}
+
+public String nextPaymentId() {
+    return "demo-payment-" + paymentSequence.getAndIncrement();
+}
+
+public String nextReceivedWebhookId() {
+    return "demo-webhook-" + receivedWebhookSequence.getAndIncrement();
+}</code></pre>
+
+            <h3>Búsqueda por ID externo</h3>
+
+            <p>
+                Esta búsqueda es clave para procesar webhooks. El webhook trae IDs del proveedor, no IDs internos.
+            </p>
+
+            <pre><code>public Optional&lt;DemoSubscription&gt; findSubscriptionByProviderSubscriptionId(String providerSubscriptionId) {
+    return subscriptions.values()
+            .stream()
+            .filter(subscription -&gt; providerSubscriptionId.equals(subscription.getProviderSubscriptionId()))
+            .findFirst();
+}
+
+public Optional&lt;DemoPayment&gt; findPaymentByProviderPaymentId(String providerPaymentId) {
+    return payments.values()
+            .stream()
+            .filter(payment -&gt; providerPaymentId.equals(payment.getProviderPaymentId()))
+            .findFirst();
+}</code></pre>
+
+            <h3>Persistencia</h3>
+
+            <p>
+                El store puede trabajar en memoria o guardar un snapshot en archivo:
+            </p>
+
+            <pre><code>private static final String STORAGE_TYPE_MEMORY = "memory";
+private static final String STORAGE_TYPE_FILE = "file";</code></pre>
+
+            <p>
+                En producción, esto debería reemplazarse por base de datos, repositorios y transacciones.
+            </p>
+
+            <h2 id="produccion">12. Qué cambiar en producción</h2>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>En StreamBox Demo</th>
+                    <th>En proyecto real</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>MockPaymentClient</code></td>
+                    <td>Cliente real del proveedor o interfaz <code>PaymentProviderClient</code>.</td>
+                </tr>
+                <tr>
+                    <td><code>DemoStore</code></td>
+                    <td>Base de datos, repositorios, transacciones y migraciones.</td>
+                </tr>
+                <tr>
+                    <td><code>DemoSubscription</code></td>
+                    <td>Entidad real como <code>BusinessSubscription</code>.</td>
+                </tr>
+                <tr>
+                    <td><code>DemoPayment</code></td>
+                    <td>Entidad real como <code>BusinessPayment</code> o <code>PaymentTransaction</code>.</td>
+                </tr>
+                <tr>
+                    <td><code>DemoReceivedWebhook</code></td>
+                    <td>Tabla real de webhooks recibidos con idempotencia.</td>
+                </tr>
+                <tr>
+                    <td>Tarjetas ficticias</td>
+                    <td>Checkout hospedado, tokenización o SDK seguro del proveedor.</td>
+                </tr>
+                <tr>
+                    <td>Planes hardcodeados</td>
+                    <td>Planes en base de datos o configurables desde administración.</td>
+                </tr>
+                <tr>
+                    <td>Estados simples</td>
+                    <td>Estados internos bien definidos y reglas de negocio completas.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h3>Checklist de adaptación</h3>
+
+            <pre><code>Crear entidades reales.
+Crear repositories.
+Crear migraciones.
+Agregar transacciones.
+Agregar idempotencia en webhooks.
+Guardar payload raw si corresponde.
+Validar firma según la pasarela real.
+Usar SDK oficial o HTTP client robusto.
+Manejar timeouts y errores.
+No guardar tarjetas reales.
+Agregar logs y auditoría.
+Separar credenciales por ambiente.
+Agregar tests automatizados.</code></pre>
+
+            <h2 id="resumen">Resumen final</h2>
+
+            <p>
+                El código de pagos de StreamBox Demo enseña una arquitectura pequeña pero muy importante:
+            </p>
+
+            <pre><code>Cliente del proveedor
+  ↓
+Servicio de billing
+  ↓
+Estado interno propio
+  ↓
+Webhook receiver
+  ↓
+Validador de firma
+  ↓
+Consulta posterior al proveedor
+  ↓
+Mapeo de estados
+  ↓
+Auditoría interna</code></pre>
+
+            <div class="docs-callout">
+                El objetivo no es copiar StreamBox Demo tal cual. El objetivo es entender el patrón y adaptarlo
+                a una aplicación real con base de datos, seguridad, transacciones, idempotencia y una pasarela
+                de pagos real.
+            </div>
+        </main>
+    </div>
+</div>
+</body>
+</html>

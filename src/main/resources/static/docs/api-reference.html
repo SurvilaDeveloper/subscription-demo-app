@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Referencia de endpoints · StreamBox Demo</title>
+    <link rel="stylesheet" href="./docs.css" />
+</head>
+<body>
+<div class="docs-shell">
+    <header class="docs-header">
+        <div class="docs-brand">
+            <h1>Referencia de endpoints</h1>
+        </div>
+
+        <nav class="docs-actions" aria-label="Acciones">
+            <a class="docs-button" href="./index.html">Docs</a>
+            <a class="docs-button" href="../index.html">StreamBox</a>
+        </nav>
+    </header>
+
+    <div class="docs-layout">
+        <aside class="docs-toc">
+            <strong>Contenido</strong>
+            <a href="#objetivo">Objetivo</a>
+            <a href="#base-url">Base URL</a>
+            <a href="#resumen">Resumen</a>
+            <a href="#health">Health</a>
+            <a href="#ui">UI</a>
+            <a href="#info">Información de integración</a>
+            <a href="#estado">Estado de la demo</a>
+            <a href="#planes">Planes</a>
+            <a href="#suscripcion">Crear suscripción</a>
+            <a href="#acciones">Acciones sobre suscripciones</a>
+            <a href="#listas">Listados internos</a>
+            <a href="#webhook">Webhook receiver</a>
+            <a href="#flujo">Flujo recomendado</a>
+            <a href="#errores">Errores frecuentes</a>
+        </aside>
+
+        <main class="docs-content">
+            <h1 id="objetivo">Referencia de endpoints de StreamBox Demo</h1>
+
+            <p>
+                Esta página resume los endpoints HTTP principales de StreamBox Demo.
+                Sirve para probar la aplicación desde curl, Postman o desde otra herramienta sin depender
+                exclusivamente de la UI.
+            </p>
+
+            <div class="docs-callout">
+                StreamBox Demo representa la aplicación principal. Sus endpoints no son los mismos que los
+                de Mock Payment Service. StreamBox guarda estado interno propio y llama al mock cuando necesita
+                crear suscripciones, pagos o consultar recursos externos.
+            </div>
+
+            <h2 id="base-url">Base URL</h2>
+
+            <p>
+                Con el puerto por defecto:
+            </p>
+
+            <pre><code>http://localhost:8080</code></pre>
+
+            <p>
+                Si publicaste StreamBox en otro puerto, por ejemplo <code>8085</code>:
+            </p>
+
+            <pre><code>http://localhost:8085</code></pre>
+
+            <h2 id="resumen">Resumen de endpoints</h2>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Método</th>
+                    <th>Endpoint</th>
+                    <th>Uso</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>GET</code></td>
+                    <td><code>/health</code></td>
+                    <td>Verificar que StreamBox está levantado.</td>
+                </tr>
+                <tr>
+                    <td><code>GET</code></td>
+                    <td><code>/</code></td>
+                    <td>Abrir la UI principal de StreamBox Demo.</td>
+                </tr>
+                <tr>
+                    <td><code>GET</code></td>
+                    <td><code>/api/demo/info</code></td>
+                    <td>Ver configuración real de integración.</td>
+                </tr>
+                <tr>
+                    <td><code>GET</code></td>
+                    <td><code>/api/demo/state</code></td>
+                    <td>Ver conteos y estado general de la demo.</td>
+                </tr>
+                <tr>
+                    <td><code>DELETE</code></td>
+                    <td><code>/api/demo/state</code></td>
+                    <td>Resetear estado interno de StreamBox.</td>
+                </tr>
+                <tr>
+                    <td><code>GET</code></td>
+                    <td><code>/api/plans</code></td>
+                    <td>Listar planes disponibles.</td>
+                </tr>
+                <tr>
+                    <td><code>POST</code></td>
+                    <td><code>/api/subscriptions/start</code></td>
+                    <td>Crear suscripción interna y simular pago inicial.</td>
+                </tr>
+                <tr>
+                    <td><code>POST</code></td>
+                    <td><code>/api/subscriptions/{id}/simulate-recurring-charge</code></td>
+                    <td>Simular cobro recurrente sobre una suscripción.</td>
+                </tr>
+                <tr>
+                    <td><code>POST</code></td>
+                    <td><code>/api/subscriptions/{id}/change-plan</code></td>
+                    <td>Cambiar el plan de una suscripción.</td>
+                </tr>
+                <tr>
+                    <td><code>POST</code></td>
+                    <td><code>/api/subscriptions/{id}/cancel</code></td>
+                    <td>Cancelar una suscripción.</td>
+                </tr>
+                <tr>
+                    <td><code>GET</code></td>
+                    <td><code>/api/demo/subscriptions</code></td>
+                    <td>Listar suscripciones internas.</td>
+                </tr>
+                <tr>
+                    <td><code>GET</code></td>
+                    <td><code>/api/demo/payments</code></td>
+                    <td>Listar pagos internos.</td>
+                </tr>
+                <tr>
+                    <td><code>GET</code></td>
+                    <td><code>/api/demo/events</code></td>
+                    <td>Listar eventos internos educativos.</td>
+                </tr>
+                <tr>
+                    <td><code>GET</code></td>
+                    <td><code>/api/demo/webhooks</code></td>
+                    <td>Listar webhooks recibidos por StreamBox.</td>
+                </tr>
+                <tr>
+                    <td><code>POST</code></td>
+                    <td><code>/api/webhooks/mock-payment</code></td>
+                    <td>Recibir webhooks desde Mock Payment Service.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h2 id="health">Health check</h2>
+
+            <p>
+                Verifica que StreamBox está levantado.
+            </p>
+
+            <pre><code>GET /health</code></pre>
+
+            <h3>Ejemplo</h3>
+
+            <pre><code>curl http://localhost:8080/health</code></pre>
+
+            <h3>Respuesta esperada</h3>
+
+            <pre><code>OK</code></pre>
+
+            <h2 id="ui">UI principal</h2>
+
+            <p>
+                Abre la interfaz web de StreamBox Demo.
+            </p>
+
+            <pre><code>GET /</code></pre>
+
+            <h3>URL</h3>
+
+            <pre><code>http://localhost:8080/</code></pre>
+
+            <p>
+                Desde la UI se pueden probar las mismas operaciones principales:
+                crear suscripción, simular cobro recurrente, cambiar plan, cancelar,
+                ver pagos, ver webhooks y revisar eventos internos.
+            </p>
+
+            <h2 id="info">Información de integración</h2>
+
+            <p>
+                Devuelve la configuración real que StreamBox está usando para comunicarse con
+                Mock Payment Service.
+            </p>
+
+            <pre><code>GET /api/demo/info</code></pre>
+
+            <h3>Ejemplo</h3>
+
+            <pre><code>curl http://localhost:8080/api/demo/info</code></pre>
+
+            <h3>Respuesta esperada en Docker</h3>
+
+            <pre><code>{
+  "name": "subscription-demo-app",
+  "public_base_url": "http://localhost:8080",
+  "webhook_base_url": "http://subscription-demo-app:8080",
+  "mock_payment_base_url": "http://mock-payment-service:9090",
+  "webhook_path": "/api/webhooks/mock-payment",
+  "webhook_url": "http://subscription-demo-app:8080/api/webhooks/mock-payment"
+}</code></pre>
+
+            <h3>Para qué sirve</h3>
+
+            <ul>
+                <li>Confirmar si StreamBox llama al mock con la URL correcta.</li>
+                <li>Confirmar qué webhook URL le entrega StreamBox al mock.</li>
+                <li>Detectar errores de configuración con Docker o puertos.</li>
+            </ul>
+
+            <h2 id="estado">Estado de la demo</h2>
+
+            <p>
+                Devuelve conteos y configuración de persistencia.
+            </p>
+
+            <pre><code>GET /api/demo/state</code></pre>
+
+            <h3>Ejemplo</h3>
+
+            <pre><code>curl http://localhost:8080/api/demo/state</code></pre>
+
+            <h3>Respuesta de ejemplo</h3>
+
+            <pre><code>{
+  "subscriptions_count": 1,
+  "payments_count": 1,
+  "events_count": 8,
+  "received_webhooks_count": 1,
+  "storage_type": "file",
+  "state_file_path": "/app/data/subscription-demo-state.bin"
+}</code></pre>
+
+            <h3>Resetear estado</h3>
+
+            <pre><code>DELETE /api/demo/state</code></pre>
+
+            <h3>Ejemplo</h3>
+
+            <pre><code>curl -X DELETE http://localhost:8080/api/demo/state</code></pre>
+
+            <p>
+                Esto borra el estado interno de StreamBox:
+            </p>
+
+            <ul>
+                <li>Suscripciones internas.</li>
+                <li>Pagos internos.</li>
+                <li>Eventos internos.</li>
+                <li>Webhooks recibidos.</li>
+                <li>Contadores internos.</li>
+            </ul>
+
+            <div class="docs-callout">
+                Este reset no borra el estado de Mock Payment Service. Para borrar el estado del mock hay que usar
+                Mock Payment Studio o <code>DELETE /mock/state</code> en el mock.
+            </div>
+
+            <h2 id="planes">Planes disponibles</h2>
+
+            <p>
+                Lista los planes hardcodeados de StreamBox Demo.
+            </p>
+
+            <pre><code>GET /api/plans</code></pre>
+
+            <h3>Ejemplo</h3>
+
+            <pre><code>curl http://localhost:8080/api/plans</code></pre>
+
+            <h3>Planes incluidos</h3>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Monto</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>basic</code></td>
+                    <td>Plan Básico</td>
+                    <td><code>10000 ARS</code></td>
+                </tr>
+                <tr>
+                    <td><code>pro</code></td>
+                    <td>Plan Pro</td>
+                    <td><code>20000 ARS</code></td>
+                </tr>
+                <tr>
+                    <td><code>enterprise</code></td>
+                    <td>Plan Empresarial</td>
+                    <td><code>50000 ARS</code></td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h2 id="suscripcion">Crear suscripción y simular pago inicial</h2>
+
+            <p>
+                Crea una suscripción interna en StreamBox, crea una preapproval en Mock Payment Service,
+                guarda el ID externo y simula el pago inicial con una tarjeta ficticia.
+            </p>
+
+            <pre><code>POST /api/subscriptions/start</code></pre>
+
+            <h3>Body</h3>
+
+            <pre><code>{
+  "plan_id": "basic",
+  "payer_email": "cliente@test.com",
+  "card_number": "4111111111111111"
+}</code></pre>
+
+            <h3>Ejemplo con curl</h3>
+
+            <pre><code>curl -X POST http://localhost:8080/api/subscriptions/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "plan_id": "basic",
+    "payer_email": "cliente@test.com",
+    "card_number": "4111111111111111"
+  }'</code></pre>
+
+            <h3>Resultado esperado con tarjeta aprobada</h3>
+
+            <pre><code>subscription.status = ACTIVE
+payment.status = APPROVED</code></pre>
+
+            <h3>Qué hace internamente</h3>
+
+            <pre><code>1. Valida el plan.
+2. Crea DemoSubscription en PENDING.
+3. Llama a Mock Payment Service.
+4. Guarda providerSubscriptionId.
+5. Simula pago inicial.
+6. Guarda DemoPayment.
+7. Actualiza estado interno.
+8. Recibe y procesa webhook.</code></pre>
+
+            <h2 id="acciones">Acciones sobre suscripciones</h2>
+
+            <h3>Simular cobro recurrente</h3>
+
+            <p>
+                Simula un pago posterior sobre una suscripción existente.
+            </p>
+
+            <pre><code>POST /api/subscriptions/{id}/simulate-recurring-charge</code></pre>
+
+            <h4>Body</h4>
+
+            <pre><code>{
+  "card_number": "4111111111111111"
+}</code></pre>
+
+            <h4>Ejemplo aprobado</h4>
+
+            <pre><code>curl -X POST http://localhost:8080/api/subscriptions/demo-subscription-1/simulate-recurring-charge \
+  -H "Content-Type: application/json" \
+  -d '{
+    "card_number": "4111111111111111"
+  }'</code></pre>
+
+            <h4>Ejemplo rechazado</h4>
+
+            <pre><code>curl -X POST http://localhost:8080/api/subscriptions/demo-subscription-1/simulate-recurring-charge \
+  -H "Content-Type: application/json" \
+  -d '{
+    "card_number": "4000000000000002"
+  }'</code></pre>
+
+            <h3>Cambiar plan</h3>
+
+            <p>
+                Cambia el plan de una suscripción interna y sincroniza el cambio con Mock Payment Service.
+            </p>
+
+            <pre><code>POST /api/subscriptions/{id}/change-plan</code></pre>
+
+            <h4>Body</h4>
+
+            <pre><code>{
+  "plan_id": "pro"
+}</code></pre>
+
+            <h4>Ejemplo</h4>
+
+            <pre><code>curl -X POST http://localhost:8080/api/subscriptions/demo-subscription-1/change-plan \
+  -H "Content-Type: application/json" \
+  -d '{
+    "plan_id": "pro"
+  }'</code></pre>
+
+            <h4>Resultado esperado</h4>
+
+            <pre><code>subscription.planId = pro
+subscription.planName = Plan Pro</code></pre>
+
+            <h3>Cancelar suscripción</h3>
+
+            <p>
+                Cancela una suscripción en Mock Payment Service y actualiza el estado interno de StreamBox.
+            </p>
+
+            <pre><code>POST /api/subscriptions/{id}/cancel</code></pre>
+
+            <h4>Ejemplo</h4>
+
+            <pre><code>curl -X POST http://localhost:8080/api/subscriptions/demo-subscription-1/cancel</code></pre>
+
+            <h4>Resultado esperado</h4>
+
+            <pre><code>subscription.status = CANCELLED</code></pre>
+
+            <h2 id="listas">Listados internos</h2>
+
+            <h3>Listar suscripciones internas</h3>
+
+            <pre><code>GET /api/demo/subscriptions</code></pre>
+
+            <pre><code>curl http://localhost:8080/api/demo/subscriptions</code></pre>
+
+            <p>
+                Muestra las suscripciones guardadas por StreamBox, no directamente las preapprovals del mock.
+            </p>
+
+            <h3>Listar pagos internos</h3>
+
+            <pre><code>GET /api/demo/payments</code></pre>
+
+            <pre><code>curl http://localhost:8080/api/demo/payments</code></pre>
+
+            <p>
+                Muestra los pagos internos que StreamBox registró después de respuestas directas o webhooks.
+            </p>
+
+            <h3>Listar eventos internos</h3>
+
+            <pre><code>GET /api/demo/events</code></pre>
+
+            <pre><code>curl http://localhost:8080/api/demo/events</code></pre>
+
+            <p>
+                Muestra eventos educativos del flujo, como creación de suscripción, creación de pago,
+                webhook recibido o actualización de estado.
+            </p>
+
+            <h3>Listar webhooks recibidos</h3>
+
+            <pre><code>GET /api/demo/webhooks</code></pre>
+
+            <pre><code>curl http://localhost:8080/api/demo/webhooks</code></pre>
+
+            <p>
+                Muestra los webhooks que StreamBox recibió desde Mock Payment Service.
+            </p>
+
+            <h2 id="webhook">Webhook receiver</h2>
+
+            <p>
+                Endpoint usado por Mock Payment Service para avisar eventos a StreamBox.
+            </p>
+
+            <pre><code>POST /api/webhooks/mock-payment</code></pre>
+
+            <p>
+                Este endpoint espera headers:
+            </p>
+
+            <pre><code>x-request-id
+x-signature</code></pre>
+
+            <p>
+                Y un payload con estructura parecida a:
+            </p>
+
+            <pre><code>{
+  "id": "mock-event-1",
+  "live_mode": false,
+  "type": "payment",
+  "date_created": "2026-05-12T15:30:00Z",
+  "user_id": "mock-user",
+  "api_version": "v1",
+  "action": "payment.created",
+  "data": {
+    "id": "mock-payment-1"
+  }
+}</code></pre>
+
+            <h3>Qué hace StreamBox al recibirlo</h3>
+
+            <ol>
+                <li>Extrae <code>x-request-id</code>.</li>
+                <li>Extrae <code>x-signature</code>.</li>
+                <li>Extrae <code>type</code>, <code>action</code> y <code>data.id</code>.</li>
+                <li>Valida la firma.</li>
+                <li>Guarda el webhook recibido.</li>
+                <li>Consulta el recurso actualizado en Mock Payment Service.</li>
+                <li>Actualiza pagos o suscripciones internas.</li>
+                <li>Marca el webhook como procesado o fallido.</li>
+            </ol>
+
+            <div class="docs-callout">
+                Normalmente no se llama a este endpoint manualmente. Lo llama Mock Payment Service cuando
+                ocurre un evento de pago o suscripción.
+            </div>
+
+            <h2 id="flujo">Flujo recomendado de prueba por API</h2>
+
+            <p>
+                Para probar StreamBox sin usar la UI:
+            </p>
+
+            <pre><code>1. Verificar health:
+   GET /health
+
+2. Resetear estado:
+   DELETE /api/demo/state
+
+3. Ver planes:
+   GET /api/plans
+
+4. Crear suscripción y pago:
+   POST /api/subscriptions/start
+
+5. Ver suscripciones internas:
+   GET /api/demo/subscriptions
+
+6. Ver pagos internos:
+   GET /api/demo/payments
+
+7. Ver webhooks recibidos:
+   GET /api/demo/webhooks
+
+8. Ver eventos internos:
+   GET /api/demo/events</code></pre>
+
+            <h3>Comandos</h3>
+
+            <pre><code>curl http://localhost:8080/health
+
+curl -X DELETE http://localhost:8080/api/demo/state
+
+curl http://localhost:8080/api/plans
+
+curl -X POST http://localhost:8080/api/subscriptions/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "plan_id": "basic",
+    "payer_email": "cliente@test.com",
+    "card_number": "4111111111111111"
+  }'
+
+curl http://localhost:8080/api/demo/subscriptions
+
+curl http://localhost:8080/api/demo/payments
+
+curl http://localhost:8080/api/demo/webhooks
+
+curl http://localhost:8080/api/demo/events</code></pre>
+
+            <h2 id="errores">Errores frecuentes</h2>
+
+            <h3>Plan inexistente</h3>
+
+            <p>
+                Si se envía un <code>plan_id</code> que no existe, la suscripción no puede crearse.
+            </p>
+
+            <pre><code>{
+  "plan_id": "unknown",
+  "payer_email": "cliente@test.com",
+  "card_number": "4111111111111111"
+}</code></pre>
+
+            <p>
+                Usar uno de estos:
+            </p>
+
+            <pre><code>basic
+pro
+enterprise</code></pre>
+
+            <h3>Suscripción inexistente</h3>
+
+            <p>
+                Si se llama una acción con un ID que no existe:
+            </p>
+
+            <pre><code>POST /api/subscriptions/demo-subscription-999/cancel</code></pre>
+
+            <p>
+                StreamBox debería responder error porque no encuentra esa suscripción interna.
+            </p>
+
+            <h3>Mock Payment Service no disponible</h3>
+
+            <p>
+                Si <code>POST /api/subscriptions/start</code> falla al crear la preapproval o al pagar,
+                revisar:
+            </p>
+
+            <ul>
+                <li>Que Mock Payment Service esté levantado.</li>
+                <li>Que <code>MOCK_PAYMENT_BASE_URL</code> sea correcto.</li>
+                <li>Que ambos contenedores compartan red Docker.</li>
+            </ul>
+
+            <h3>Webhook no recibido</h3>
+
+            <p>
+                Si el pago aparece en Mock Payment Service pero no aparece como webhook recibido en StreamBox,
+                revisar:
+            </p>
+
+            <ul>
+                <li><code>DEMO_APP_WEBHOOK_BASE_URL</code>.</li>
+                <li>La tabla de webhooks salientes en Mock Payment Studio.</li>
+                <li>Si el webhook tiene <code>delivered=true</code>.</li>
+                <li>Si el endpoint <code>/api/webhooks/mock-payment</code> está disponible.</li>
+            </ul>
+
+            <h3>Firma inválida</h3>
+
+            <p>
+                Si el webhook llega pero no se procesa por firma inválida, revisar:
+            </p>
+
+            <pre><code>MOCK_PAYMENT_WEBHOOK_SECRET</code></pre>
+
+            <p>
+                El valor debe coincidir en StreamBox Demo y en Mock Payment Service.
+            </p>
+
+            <div class="docs-callout">
+                Para depurar una integración, los endpoints más útiles suelen ser
+                <code>/api/demo/info</code>, <code>/api/demo/webhooks</code>,
+                <code>/api/demo/events</code> y la tabla de webhooks salientes en Mock Payment Studio.
+            </div>
+        </main>
+    </div>
+</div>
+</body>
+</html>

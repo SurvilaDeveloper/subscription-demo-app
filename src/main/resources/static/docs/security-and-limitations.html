@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Seguridad y límites · StreamBox Demo</title>
+    <link rel="stylesheet" href="./docs.css" />
+</head>
+<body>
+<div class="docs-shell">
+    <header class="docs-header">
+        <div class="docs-brand">
+            <h1>Seguridad y límites</h1>
+        </div>
+
+        <nav class="docs-actions" aria-label="Acciones">
+            <a class="docs-button" href="./index.html">Docs</a>
+            <a class="docs-button" href="../index.html">StreamBox</a>
+        </nav>
+    </header>
+
+    <div class="docs-layout">
+        <aside class="docs-toc">
+            <strong>Contenido</strong>
+            <a href="#objetivo">Objetivo</a>
+            <a href="#que-es">Qué es StreamBox Demo</a>
+            <a href="#que-no-es">Qué no es</a>
+            <a href="#produccion">No usar tal cual en producción</a>
+            <a href="#tarjetas">Tarjetas ficticias</a>
+            <a href="#secrets">Secrets y configuración</a>
+            <a href="#webhooks">Webhooks</a>
+            <a href="#estado">Estado interno</a>
+            <a href="#persistencia">Persistencia</a>
+            <a href="#datos">Datos personales</a>
+            <a href="#fraude">Fraude y abuso</a>
+            <a href="#pasarela-real">Al pasar a pasarela real</a>
+            <a href="#checklist">Checklist</a>
+        </aside>
+
+        <main class="docs-content">
+            <h1 id="objetivo">Seguridad y límites de StreamBox Demo</h1>
+
+            <p>
+                Esta guía explica qué límites tiene StreamBox Demo y qué cuidados debería tener
+                un desarrollador al adaptar este patrón a una aplicación real.
+            </p>
+
+            <div class="docs-callout">
+                StreamBox Demo es una aplicación educativa. Sirve para aprender el flujo de integración
+                con una pasarela de pagos simulada, pero no debe usarse tal cual como aplicación productiva.
+            </div>
+
+            <h2 id="que-es">Qué es StreamBox Demo</h2>
+
+            <p>
+                StreamBox Demo representa una aplicación principal que vende planes de suscripción.
+                Su objetivo es mostrar cómo una aplicación puede integrarse con Mock Payment Service.
+            </p>
+
+            <p>
+                Permite aprender:
+            </p>
+
+            <ul>
+                <li>Cómo crear una suscripción interna.</li>
+                <li>Cómo llamar a un proveedor de pagos simulado.</li>
+                <li>Cómo guardar IDs externos del proveedor.</li>
+                <li>Cómo simular pagos aprobados, rechazados y pendientes.</li>
+                <li>Cómo recibir webhooks.</li>
+                <li>Cómo validar firmas de webhooks.</li>
+                <li>Cómo consultar el recurso actualizado al proveedor.</li>
+                <li>Cómo actualizar estados internos.</li>
+                <li>Cómo registrar eventos internos para entender el flujo.</li>
+            </ul>
+
+            <h2 id="que-no-es">Qué no es StreamBox Demo</h2>
+
+            <p>
+                StreamBox Demo no es una aplicación lista para producción.
+            </p>
+
+            <p>
+                No incluye:
+            </p>
+
+            <ul>
+                <li>Autenticación real de usuarios.</li>
+                <li>Autorización por roles.</li>
+                <li>Base de datos productiva.</li>
+                <li>Transacciones de base de datos.</li>
+                <li>Panel administrativo real.</li>
+                <li>Gestión real de clientes.</li>
+                <li>Facturación real.</li>
+                <li>Checkout real.</li>
+                <li>Control antifraude real.</li>
+                <li>Protección completa contra abuso.</li>
+                <li>Integración con una pasarela real.</li>
+                <li>Procesamiento de dinero real.</li>
+            </ul>
+
+            <h2 id="produccion">No usar tal cual en producción</h2>
+
+            <p>
+                StreamBox Demo debería usarse como material educativo, demo técnica o referencia de arquitectura.
+                No debería exponerse públicamente como si fuera una aplicación comercial real.
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Parte</th>
+                    <th>En la demo</th>
+                    <th>En producción</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>Usuarios</td>
+                    <td>Email escrito en formulario.</td>
+                    <td>Usuarios reales autenticados.</td>
+                </tr>
+                <tr>
+                    <td>Planes</td>
+                    <td>Planes hardcodeados.</td>
+                    <td>Planes en base de datos o panel administrable.</td>
+                </tr>
+                <tr>
+                    <td>Pagos</td>
+                    <td>Mock Payment Service.</td>
+                    <td>Proveedor real como Mercado Pago, Stripe, PayPal u otro.</td>
+                </tr>
+                <tr>
+                    <td>Store</td>
+                    <td>Memoria o archivo local.</td>
+                    <td>Base de datos con transacciones.</td>
+                </tr>
+                <tr>
+                    <td>Seguridad</td>
+                    <td>Configuración simple de demo.</td>
+                    <td>Autenticación, autorización, HTTPS, logs y controles.</td>
+                </tr>
+                <tr>
+                    <td>Auditoría</td>
+                    <td>Eventos educativos.</td>
+                    <td>Auditoría persistente y consultable.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h2 id="tarjetas">Tarjetas ficticias</h2>
+
+            <p>
+                Las tarjetas que aparecen en StreamBox son tarjetas ficticias para probar escenarios
+                contra Mock Payment Service.
+            </p>
+
+            <pre><code>4111111111111111
+4000000000000002
+4000000000009995
+4000000000000069
+4000000000000341
+4000000000000259</code></pre>
+
+            <p>
+                No deben usarse tarjetas reales en StreamBox Demo.
+            </p>
+
+            <div class="docs-callout">
+                En una aplicación real, lo ideal es no manejar números completos de tarjeta en el backend.
+                Conviene usar checkout hospedado, tokenización o componentes seguros del proveedor de pagos.
+            </div>
+
+            <h2 id="secrets">Secrets y configuración</h2>
+
+            <p>
+                La demo usa un secret simple para validar webhooks:
+            </p>
+
+            <pre><code>MOCK_PAYMENT_WEBHOOK_SECRET=dev-secret</code></pre>
+
+            <p>
+                Ese valor sirve para desarrollo local, pero no debería usarse en producción.
+            </p>
+
+            <h3>Buenas prácticas</h3>
+
+            <ul>
+                <li>No commitear secrets reales.</li>
+                <li>No hardcodear credenciales productivas.</li>
+                <li>Usar variables de entorno.</li>
+                <li>Separar credenciales de desarrollo, staging y producción.</li>
+                <li>Rotar secrets si se filtran.</li>
+                <li>No imprimir secrets en logs.</li>
+                <li>Usar secret managers cuando el proyecto crece.</li>
+            </ul>
+
+            <h3>Variables sensibles</h3>
+
+            <pre><code>MOCK_PAYMENT_WEBHOOK_SECRET
+ACCESS_TOKEN_DEL_PROVEEDOR_REAL
+SECRET_KEY_DEL_PROVEEDOR_REAL
+WEBHOOK_SECRET_DEL_PROVEEDOR_REAL</code></pre>
+
+            <h2 id="webhooks">Webhooks</h2>
+
+            <p>
+                StreamBox valida la firma de los webhooks antes de procesarlos. Esa es una buena práctica
+                que sí conviene conservar en una aplicación real.
+            </p>
+
+            <p>
+                La demo valida:
+            </p>
+
+            <ul>
+                <li>Que exista <code>data.id</code>.</li>
+                <li>Que exista <code>x-request-id</code>.</li>
+                <li>Que exista <code>x-signature</code>.</li>
+                <li>Que la firma coincida con el secret compartido.</li>
+            </ul>
+
+            <p>
+                El patrón correcto es:
+            </p>
+
+            <pre><code>Recibir webhook
+  ↓
+Validar firma
+  ↓
+Registrar evento recibido
+  ↓
+Consultar recurso actualizado al proveedor
+  ↓
+Actualizar estado interno</code></pre>
+
+            <h3>Qué reforzar en producción</h3>
+
+            <ul>
+                <li>Validar la firma según la documentación oficial del proveedor.</li>
+                <li>Validar antigüedad del timestamp si el proveedor lo permite.</li>
+                <li>Evitar replay attacks.</li>
+                <li>Implementar idempotencia fuerte.</li>
+                <li>Guardar eventos recibidos.</li>
+                <li>No procesar dos veces el mismo evento.</li>
+                <li>Responder <code>2xx</code> solo cuando el evento fue aceptado correctamente.</li>
+            </ul>
+
+            <h2 id="estado">Estado interno</h2>
+
+            <p>
+                StreamBox guarda su propio estado interno. Esta idea sí es importante para producción.
+            </p>
+
+            <p>
+                La aplicación principal no debería depender únicamente del panel o del estado externo
+                de la pasarela.
+            </p>
+
+            <h3>StreamBox guarda</h3>
+
+            <ul>
+                <li>Suscripciones internas.</li>
+                <li>Pagos internos.</li>
+                <li>Webhooks recibidos.</li>
+                <li>Eventos internos.</li>
+            </ul>
+
+            <h3>Por qué importa</h3>
+
+            <p>
+                Porque una aplicación real necesita saber:
+            </p>
+
+            <ul>
+                <li>Qué usuario contrató qué plan.</li>
+                <li>Qué proveedor procesó el pago.</li>
+                <li>Cuál es el ID externo del pago.</li>
+                <li>Cuál es el ID externo de la suscripción.</li>
+                <li>Qué estado interno debe aplicar al negocio.</li>
+                <li>Qué pasó si un webhook falló.</li>
+                <li>Qué ocurrió ante un reclamo o investigación.</li>
+            </ul>
+
+            <h2 id="persistencia">Persistencia</h2>
+
+            <p>
+                StreamBox Demo puede guardar estado en memoria o en archivo.
+            </p>
+
+            <pre><code>DEMO_APP_STORAGE_TYPE=memory
+DEMO_APP_STORAGE_TYPE=file</code></pre>
+
+            <p>
+                Con Docker, suele usarse:
+            </p>
+
+            <pre><code>DEMO_APP_STORAGE_TYPE=file
+DEMO_APP_STORAGE_FILE_PATH=/app/data/subscription-demo-state.bin</code></pre>
+
+            <p>
+                Y un volumen:
+            </p>
+
+            <pre><code>./data:/app/data</code></pre>
+
+            <h3>Límite importante</h3>
+
+            <p>
+                Esta persistencia es solo para demo. No reemplaza una base de datos real.
+            </p>
+
+            <p>
+                En producción debería usarse:
+            </p>
+
+            <ul>
+                <li>Base de datos relacional o adecuada al dominio.</li>
+                <li>Repositorios.</li>
+                <li>Transacciones.</li>
+                <li>Migraciones.</li>
+                <li>Constraints únicos.</li>
+                <li>Backups.</li>
+                <li>Auditoría.</li>
+            </ul>
+
+            <h2 id="datos">Datos personales</h2>
+
+            <p>
+                StreamBox Demo pide un email para simular el pagador.
+            </p>
+
+            <pre><code>payerEmail</code></pre>
+
+            <p>
+                En una aplicación real, un email es un dato personal. También pueden ser datos personales:
+            </p>
+
+            <ul>
+                <li>Nombre.</li>
+                <li>Teléfono.</li>
+                <li>Dirección.</li>
+                <li>IP.</li>
+                <li>Historial de pagos.</li>
+                <li>Identificadores de cuenta.</li>
+                <li>Datos de facturación.</li>
+            </ul>
+
+            <h3>Buenas prácticas</h3>
+
+            <ul>
+                <li>Recolectar solo lo necesario.</li>
+                <li>Informar al usuario para qué se usan sus datos.</li>
+                <li>Proteger la base de datos.</li>
+                <li>No guardar datos sensibles innecesarios.</li>
+                <li>No loguear datos personales sin necesidad.</li>
+                <li>Definir política de retención.</li>
+                <li>Permitir baja o eliminación cuando corresponda.</li>
+            </ul>
+
+            <h2 id="fraude">Fraude y abuso</h2>
+
+            <p>
+                StreamBox Demo no tiene controles antifraude reales. Eso está bien para una demo, pero no
+                sería suficiente en producción.
+            </p>
+
+            <h3>Riesgos en una aplicación real</h3>
+
+            <ul>
+                <li>Muchos intentos de pago fallidos.</li>
+                <li>Uso de tarjetas robadas.</li>
+                <li>Creación masiva de cuentas.</li>
+                <li>Abuso de promociones.</li>
+                <li>Contracargos.</li>
+                <li>Reclamos maliciosos.</li>
+                <li>Manipulación de endpoints.</li>
+            </ul>
+
+            <h3>Controles recomendados</h3>
+
+            <ul>
+                <li>Rate limiting.</li>
+                <li>Límites de intentos de pago.</li>
+                <li>Alertas ante actividad sospechosa.</li>
+                <li>Bloqueos temporales.</li>
+                <li>Revisión manual de casos críticos.</li>
+                <li>Uso de herramientas antifraude de la pasarela.</li>
+                <li>Registro de eventos de seguridad.</li>
+            </ul>
+
+            <h2 id="pasarela-real">Al pasar a una pasarela real</h2>
+
+            <p>
+                Al reemplazar Mock Payment Service por una pasarela real, hay que revisar cuidadosamente
+                la documentación oficial del proveedor.
+            </p>
+
+            <h3>Aspectos a cambiar</h3>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>En la demo</th>
+                    <th>Con proveedor real</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>MockPaymentClient</code></td>
+                    <td>Cliente real o SDK oficial del proveedor.</td>
+                </tr>
+                <tr>
+                    <td><code>WebhookSignatureVerifier</code></td>
+                    <td>Verificación de firma oficial del proveedor.</td>
+                </tr>
+                <tr>
+                    <td>Tarjetas ficticias</td>
+                    <td>Checkout, tokenización o SDK seguro.</td>
+                </tr>
+                <tr>
+                    <td>Estados simples</td>
+                    <td>Mapeo completo de estados externos a internos.</td>
+                </tr>
+                <tr>
+                    <td>DemoStore</td>
+                    <td>Base de datos real.</td>
+                </tr>
+                <tr>
+                    <td>Eventos educativos</td>
+                    <td>Auditoría y logs estructurados.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h3>Regla importante</h3>
+
+            <pre><code>No adaptar solo el endpoint feliz.
+
+También adaptar:
+rechazos
+pendientes
+cancelaciones
+reembolsos
+contracargos
+webhooks duplicados
+webhooks fuera de orden
+fallas del proveedor
+timeouts
+errores parciales</code></pre>
+
+            <h2 id="checklist">Checklist antes de usar este patrón en producción</h2>
+
+            <ol>
+                <li>Agregar autenticación real.</li>
+                <li>Agregar autorización por roles.</li>
+                <li>Reemplazar <code>DemoStore</code> por base de datos.</li>
+                <li>Agregar transacciones.</li>
+                <li>Agregar migraciones.</li>
+                <li>Guardar pagos y suscripciones con constraints únicos.</li>
+                <li>Implementar idempotencia fuerte.</li>
+                <li>Usar proveedor real o SDK oficial.</li>
+                <li>Validar webhooks según documentación oficial.</li>
+                <li>No guardar tarjetas reales.</li>
+                <li>No usar <code>dev-secret</code>.</li>
+                <li>Usar HTTPS.</li>
+                <li>Agregar rate limiting.</li>
+                <li>Agregar logs sin datos sensibles.</li>
+                <li>Agregar auditoría de operaciones críticas.</li>
+                <li>Definir política de privacidad.</li>
+                <li>Definir términos y condiciones.</li>
+                <li>Definir política de cancelación y reembolsos.</li>
+                <li>Consultar requisitos legales, fiscales y de seguridad aplicables.</li>
+            </ol>
+
+            <div class="docs-callout">
+                StreamBox Demo es útil como mapa. Para producción, el patrón debe reforzarse con seguridad,
+                base de datos real, idempotencia, cumplimiento legal, monitoreo y una pasarela de pagos real.
+            </div>
+        </main>
+    </div>
+</div>
+</body>
+</html>

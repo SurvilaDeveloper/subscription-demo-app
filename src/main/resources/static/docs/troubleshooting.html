@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Troubleshooting · StreamBox Demo</title>
+    <link rel="stylesheet" href="./docs.css" />
+</head>
+<body>
+<div class="docs-shell">
+    <header class="docs-header">
+        <div class="docs-brand">
+            <h1>Troubleshooting</h1>
+        </div>
+
+        <nav class="docs-actions" aria-label="Acciones">
+            <a class="docs-button" href="./index.html">Docs</a>
+            <a class="docs-button" href="../index.html">StreamBox</a>
+        </nav>
+    </header>
+
+    <div class="docs-layout">
+        <aside class="docs-toc">
+            <strong>Contenido</strong>
+            <a href="#objetivo">Objetivo</a>
+            <a href="#diagnostico">Diagnóstico rápido</a>
+            <a href="#docker">Docker no responde</a>
+            <a href="#streambox-no-abre">StreamBox no abre</a>
+            <a href="#mock-no-conecta">No conecta con Mock</a>
+            <a href="#puertos">Puertos ocupados</a>
+            <a href="#red">Red Docker</a>
+            <a href="#webhook-no-llega">Webhook no llega</a>
+            <a href="#firma">Firma inválida</a>
+            <a href="#estado">Estado viejo</a>
+            <a href="#pagos">Pago no aparece</a>
+            <a href="#suscripcion">Suscripción no cambia</a>
+            <a href="#logs">Logs útiles</a>
+            <a href="#checklist">Checklist final</a>
+        </aside>
+
+        <main class="docs-content">
+            <h1 id="objetivo">Troubleshooting de StreamBox Demo</h1>
+
+            <p>
+                Esta guía ayuda a diagnosticar problemas comunes al usar StreamBox Demo junto con
+                Mock Payment Service.
+            </p>
+
+            <p>
+                La mayoría de los errores aparecen por configuración de Docker, uso incorrecto de
+                <code>localhost</code>, puertos ocupados, servicios en redes distintas, secrets diferentes
+                o estado persistido de pruebas anteriores.
+            </p>
+
+            <div class="docs-callout">
+                Regla práctica: primero revisar conectividad y configuración. Después revisar webhooks,
+                firma y procesamiento interno.
+            </div>
+
+            <h2 id="diagnostico">Diagnóstico rápido</h2>
+
+            <p>
+                Antes de revisar casos específicos, ejecutar:
+            </p>
+
+            <pre><code>docker ps
+docker network ls</code></pre>
+
+            <p>
+                Verificar que estén corriendo los dos contenedores:
+            </p>
+
+            <pre><code>mock-payment-service
+subscription-demo-app</code></pre>
+
+            <p>
+                Verificar que Mock Payment Service responda:
+            </p>
+
+            <pre><code>curl http://localhost:9090/health</code></pre>
+
+            <p>
+                Respuesta esperada:
+            </p>
+
+            <pre><code>OK</code></pre>
+
+            <p>
+                Verificar que StreamBox abra en el navegador:
+            </p>
+
+            <pre><code>http://localhost:8080/</code></pre>
+
+            <h2 id="docker">Docker no responde</h2>
+
+            <p>
+                Si aparece un error parecido a:
+            </p>
+
+            <pre><code>Docker Desktop is unable to start</code></pre>
+
+            <p>
+                significa que Docker Desktop o el daemon de Docker no están corriendo correctamente.
+            </p>
+
+            <h3>Soluciones</h3>
+
+            <ol>
+                <li>Abrir Docker Desktop manualmente.</li>
+                <li>Esperar a que termine de iniciar.</li>
+                <li>Ejecutar <code>docker ps</code>.</li>
+                <li>Si sigue fallando, cerrar Docker Desktop.</li>
+                <li>Ejecutar <code>wsl --shutdown</code> desde PowerShell.</li>
+                <li>Abrir Docker Desktop nuevamente.</li>
+            </ol>
+
+            <pre><code>wsl --shutdown</code></pre>
+
+            <div class="docs-callout">
+                En Windows, Docker Desktop depende de WSL 2. Si WSL queda trabado, Docker puede dejar
+                de responder aunque los archivos del proyecto estén bien.
+            </div>
+
+            <h2 id="streambox-no-abre">StreamBox no abre en el navegador</h2>
+
+            <p>
+                URL esperada con configuración por defecto:
+            </p>
+
+            <pre><code>http://localhost:8080/</code></pre>
+
+            <h3>Revisar contenedor</h3>
+
+            <pre><code>docker ps</code></pre>
+
+            <p>
+                Buscar algo parecido a:
+            </p>
+
+            <pre><code>subscription-demo-app   0.0.0.0:8080-&gt;8080/tcp</code></pre>
+
+            <h3>Ver logs</h3>
+
+            <pre><code>docker logs subscription-demo-app</code></pre>
+
+            <h3>Posibles causas</h3>
+
+            <ul>
+                <li>Docker Desktop no está corriendo.</li>
+                <li>El contenedor no levantó.</li>
+                <li>El puerto publicado no es <code>8080</code>.</li>
+                <li>El puerto está ocupado por otra aplicación.</li>
+                <li>El navegador está abriendo una URL vieja.</li>
+            </ul>
+
+            <h3>Si usaste otro puerto</h3>
+
+            <p>
+                Si levantaste StreamBox con:
+            </p>
+
+            <pre><code>DEMO_APP_HOST_PORT=8085 docker compose up --build</code></pre>
+
+            <p>
+                entonces tenés que abrir:
+            </p>
+
+            <pre><code>http://localhost:8085/</code></pre>
+
+            <h2 id="mock-no-conecta">StreamBox no conecta con Mock Payment Service</h2>
+
+            <p>
+                Síntoma típico: al intentar suscribirse, StreamBox falla al crear la preapproval
+                o al simular el pago.
+            </p>
+
+            <h3>Revisar que Mock esté levantado</h3>
+
+            <pre><code>curl http://localhost:9090/health</code></pre>
+
+            <h3>Revisar configuración en la UI</h3>
+
+            <p>
+                En StreamBox, mirar la sección:
+            </p>
+
+            <pre><code>Configuración de integración</code></pre>
+
+            <p>
+                Si StreamBox corre en Docker, el valor correcto es:
+            </p>
+
+            <pre><code>MOCK_PAYMENT_BASE_URL=http://mock-payment-service:9090</code></pre>
+
+            <p>
+                Este valor sería incorrecto dentro de Docker:
+            </p>
+
+            <pre><code>MOCK_PAYMENT_BASE_URL=http://localhost:9090</code></pre>
+
+            <p>
+                Porque desde el contenedor de StreamBox, <code>localhost</code> apunta al propio contenedor
+                de StreamBox, no al contenedor de Mock Payment Service.
+            </p>
+
+            <h2 id="puertos">Puertos ocupados</h2>
+
+            <h3>StreamBox: puerto 8080 ocupado</h3>
+
+            <p>
+                Usar otro puerto publicado:
+            </p>
+
+            <pre><code>DEMO_APP_HOST_PORT=8085 \
+DEMO_APP_PUBLIC_BASE_URL=http://localhost:8085 \
+docker compose up --build</code></pre>
+
+            <p>
+                Abrir:
+            </p>
+
+            <pre><code>http://localhost:8085/</code></pre>
+
+            <h3>Mock Payment Service: puerto 9090 ocupado</h3>
+
+            <p>
+                Desde el proyecto de Mock Payment Service:
+            </p>
+
+            <pre><code>MOCK_PAYMENT_HOST_PORT=9095 \
+MOCK_PAYMENT_BASE_URL=http://localhost:9095 \
+docker compose up --build</code></pre>
+
+            <p>
+                Abrir Mock Payment Studio en:
+            </p>
+
+            <pre><code>http://localhost:9095/studio/</code></pre>
+
+            <div class="docs-callout">
+                Si ambos servicios corren en Docker, cambiar el puerto publicado en host no cambia
+                la comunicación interna. StreamBox debe seguir llamando a
+                <code>http://mock-payment-service:9090</code>.
+            </div>
+
+            <h2 id="red">Problemas con la red Docker</h2>
+
+            <p>
+                Si los proyectos corren en contenedores separados, ambos deben estar conectados a:
+            </p>
+
+            <pre><code>payment-demo-network</code></pre>
+
+            <h3>Crear red</h3>
+
+            <pre><code>docker network create payment-demo-network</code></pre>
+
+            <h3>Inspeccionar red</h3>
+
+            <pre><code>docker network inspect payment-demo-network</code></pre>
+
+            <p>
+                En la salida deberían aparecer:
+            </p>
+
+            <pre><code>mock-payment-service
+subscription-demo-app</code></pre>
+
+            <h3>Error típico</h3>
+
+            <p>
+                StreamBox y Mock están levantados, pero no se ven entre sí.
+            </p>
+
+            <p>
+                Causas posibles:
+            </p>
+
+            <ul>
+                <li>Uno de los proyectos no está usando la red externa.</li>
+                <li>La red externa no existe.</li>
+                <li>Un contenedor fue levantado antes de crear la red.</li>
+                <li>El nombre del contenedor o servicio no coincide con la URL configurada.</li>
+            </ul>
+
+            <h2 id="webhook-no-llega">El webhook no llega a StreamBox</h2>
+
+            <p>
+                Síntoma típico:
+            </p>
+
+            <ul>
+                <li>Mock Payment Studio muestra <code>delivered=false</code>.</li>
+                <li>StreamBox no muestra nada en <strong>Webhooks recibidos por StreamBox</strong>.</li>
+                <li>La suscripción no se actualiza después del pago.</li>
+            </ul>
+
+            <h3>URL correcta con ambos servicios en Docker</h3>
+
+            <pre><code>http://subscription-demo-app:8080/api/webhooks/mock-payment</code></pre>
+
+            <h3>URL incorrecta con ambos servicios en Docker</h3>
+
+            <pre><code>http://localhost:8080/api/webhooks/mock-payment</code></pre>
+
+            <p>
+                Esa URL es incorrecta porque, desde el contenedor de Mock Payment Service,
+                <code>localhost</code> apunta al propio mock.
+            </p>
+
+            <h3>Qué revisar</h3>
+
+            <ol>
+                <li>En StreamBox, revisar <code>DEMO_APP_WEBHOOK_BASE_URL</code>.</li>
+                <li>Debe ser <code>http://subscription-demo-app:8080</code> si ambos corren en Docker.</li>
+                <li>En Mock Payment Studio, revisar el webhook saliente.</li>
+                <li>Ver si aparece <code>delivered=true</code> o <code>delivered=false</code>.</li>
+                <li>En StreamBox, revisar la tabla <strong>Webhooks recibidos por StreamBox</strong>.</li>
+            </ol>
+
+            <h2 id="firma">Firma inválida</h2>
+
+            <p>
+                Síntoma típico:
+            </p>
+
+            <ul>
+                <li>StreamBox recibe el webhook.</li>
+                <li>Pero aparece como firma inválida o procesamiento fallido.</li>
+                <li>En la tabla de webhooks recibidos aparece un error.</li>
+            </ul>
+
+            <h3>Revisar secret</h3>
+
+            <p>
+                Mock Payment Service firma webhooks con:
+            </p>
+
+            <pre><code>MOCK_PAYMENT_WEBHOOK_SECRET</code></pre>
+
+            <p>
+                StreamBox valida webhooks con el mismo valor:
+            </p>
+
+            <pre><code>MOCK_PAYMENT_WEBHOOK_SECRET=dev-secret</code></pre>
+
+            <p>
+                Si los valores no coinciden, StreamBox rechaza el webhook.
+            </p>
+
+            <h3>Valor recomendado para la demo</h3>
+
+            <pre><code>MOCK_PAYMENT_WEBHOOK_SECRET=dev-secret</code></pre>
+
+            <div class="docs-callout">
+                En producción, el secret no debería ser <code>dev-secret</code>. Debería ser un valor seguro,
+                privado y configurado fuera del repositorio.
+            </div>
+
+            <h2 id="estado">Estado viejo o datos inconsistentes</h2>
+
+            <p>
+                StreamBox y Mock Payment Service tienen estados separados.
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Aplicación</th>
+                    <th>Qué guarda</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>StreamBox Demo</td>
+                    <td>Suscripciones internas, pagos internos, webhooks recibidos y eventos internos.</td>
+                </tr>
+                <tr>
+                    <td>Mock Payment Service</td>
+                    <td>Preapprovals, payments, webhooks salientes y receptor interno.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h3>Resetear solo StreamBox</h3>
+
+            <p>
+                Usar el botón:
+            </p>
+
+            <pre><code>Resetear demo</code></pre>
+
+            <h3>Resetear solo Mock Payment Service</h3>
+
+            <p>
+                Desde Mock Payment Studio:
+            </p>
+
+            <pre><code>Resetear estado</code></pre>
+
+            <p>
+                O por curl:
+            </p>
+
+            <pre><code>curl -X DELETE http://localhost:9090/mock/state</code></pre>
+
+            <h3>Borrar datos persistidos de StreamBox</h3>
+
+            <pre><code>docker compose down
+rm -rf data
+docker compose up --build</code></pre>
+
+            <p>
+                En Windows también se puede borrar manualmente la carpeta:
+            </p>
+
+            <pre><code>./data/</code></pre>
+
+            <h2 id="pagos">El pago no aparece en StreamBox</h2>
+
+            <p>
+                Si el pago aparece en Mock Payment Service pero no aparece en StreamBox, revisar:
+            </p>
+
+            <ol>
+                <li>Si el webhook fue enviado.</li>
+                <li>Si Mock Payment Studio muestra <code>delivered=true</code>.</li>
+                <li>Si StreamBox recibió el webhook.</li>
+                <li>Si la firma fue válida.</li>
+                <li>Si el webhook fue procesado.</li>
+                <li>Si StreamBox pudo consultar <code>GET /payment/{id}</code>.</li>
+            </ol>
+
+            <p>
+                En la UI de StreamBox, revisar:
+            </p>
+
+            <pre><code>Webhooks recibidos por StreamBox
+Pagos internos
+Eventos internos</code></pre>
+
+            <h2 id="suscripcion">La suscripción no cambia de estado</h2>
+
+            <p>
+                StreamBox actualiza su estado interno cuando:
+            </p>
+
+            <ul>
+                <li>Recibe una respuesta directa al pagar.</li>
+                <li>Procesa un webhook de pago.</li>
+                <li>Procesa un webhook de preapproval.</li>
+                <li>Consulta el estado actualizado al proveedor.</li>
+            </ul>
+
+            <h3>Qué revisar</h3>
+
+            <ol>
+                <li>Que la suscripción interna tenga <code>providerSubscriptionId</code>.</li>
+                <li>Que el pago externo tenga <code>preapprovalId</code>.</li>
+                <li>Que StreamBox encuentre la suscripción por provider ID.</li>
+                <li>Que el estado externo sea mapeable a estado interno.</li>
+                <li>Que no haya error en <strong>Eventos internos</strong>.</li>
+            </ol>
+
+            <h3>Estados esperados</h3>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Proveedor</th>
+                    <th>StreamBox</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>pending</code></td>
+                    <td><code>PENDING</code></td>
+                </tr>
+                <tr>
+                    <td><code>authorized</code></td>
+                    <td><code>ACTIVE</code></td>
+                </tr>
+                <tr>
+                    <td><code>payment_failed</code></td>
+                    <td><code>PAYMENT_FAILED</code></td>
+                </tr>
+                <tr>
+                    <td><code>paused</code></td>
+                    <td><code>PAUSED</code></td>
+                </tr>
+                <tr>
+                    <td><code>cancelled</code></td>
+                    <td><code>CANCELLED</code></td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h2 id="logs">Logs útiles</h2>
+
+            <h3>Ver logs de StreamBox</h3>
+
+            <pre><code>docker logs subscription-demo-app</code></pre>
+
+            <h3>Ver logs de Mock Payment Service</h3>
+
+            <pre><code>docker logs mock-payment-service</code></pre>
+
+            <h3>Ver contenedores</h3>
+
+            <pre><code>docker ps</code></pre>
+
+            <h3>Ver contenedores detenidos</h3>
+
+            <pre><code>docker ps -a</code></pre>
+
+            <h3>Bajar StreamBox</h3>
+
+            <pre><code>docker compose down</code></pre>
+
+            <h3>Levantar de nuevo</h3>
+
+            <pre><code>docker compose up --build</code></pre>
+
+            <h2 id="checklist">Checklist final</h2>
+
+            <ol>
+                <li>Docker Desktop está corriendo.</li>
+                <li>Mock Payment Service está levantado.</li>
+                <li>StreamBox Demo está levantado.</li>
+                <li>La red <code>payment-demo-network</code> existe.</li>
+                <li>Ambos contenedores están en la red compartida.</li>
+                <li>StreamBox abre desde el navegador.</li>
+                <li>Mock Payment Studio abre desde el navegador.</li>
+                <li><code>MOCK_PAYMENT_BASE_URL</code> es correcto.</li>
+                <li><code>DEMO_APP_WEBHOOK_BASE_URL</code> es correcto.</li>
+                <li>El secret coincide en ambos servicios.</li>
+                <li>Se puede crear una suscripción desde StreamBox.</li>
+                <li>Mock Payment Service genera el pago.</li>
+                <li>Mock Payment Studio muestra el webhook saliente.</li>
+                <li>StreamBox muestra el webhook recibido.</li>
+                <li>La firma aparece válida.</li>
+                <li>El webhook aparece procesado.</li>
+                <li>La suscripción interna cambia de estado.</li>
+                <li>El pago interno aparece registrado.</li>
+            </ol>
+
+            <div class="docs-callout">
+                Si el problema sigue, el lugar más útil para mirar suele ser la combinación de:
+                <strong>Configuración de integración</strong>, <strong>Webhooks recibidos por StreamBox</strong>,
+                <strong>Eventos internos</strong> y <strong>Webhooks salientes</strong> en Mock Payment Studio.
+            </div>
+        </main>
+    </div>
+</div>
+</body>
+</html>

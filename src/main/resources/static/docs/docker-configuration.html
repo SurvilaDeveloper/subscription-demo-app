@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Docker y configuración · StreamBox Demo</title>
+    <link rel="stylesheet" href="./docs.css" />
+</head>
+<body>
+<div class="docs-shell">
+    <header class="docs-header">
+        <div class="docs-brand">
+            <h1>Docker y configuración</h1>
+        </div>
+
+        <nav class="docs-actions" aria-label="Acciones">
+            <a class="docs-button" href="./index.html">Docs</a>
+            <a class="docs-button" href="../index.html">StreamBox</a>
+        </nav>
+    </header>
+
+    <div class="docs-layout">
+        <aside class="docs-toc">
+            <strong>Contenido</strong>
+            <a href="#objetivo">Objetivo</a>
+            <a href="#idea-central">Idea central</a>
+            <a href="#puertos">Puertos</a>
+            <a href="#variables">Variables</a>
+            <a href="#red">Red Docker</a>
+            <a href="#mock-base-url">MOCK_PAYMENT_BASE_URL</a>
+            <a href="#webhook-base-url">DEMO_APP_WEBHOOK_BASE_URL</a>
+            <a href="#public-base-url">DEMO_APP_PUBLIC_BASE_URL</a>
+            <a href="#storage">Persistencia</a>
+            <a href="#casos">Casos frecuentes</a>
+            <a href="#errores">Errores comunes</a>
+            <a href="#checklist">Checklist</a>
+        </aside>
+
+        <main class="docs-content">
+            <h1 id="objetivo">Docker y configuración de StreamBox Demo</h1>
+
+            <p>
+                Esta guía explica cómo configurar StreamBox Demo cuando se ejecuta con Docker
+                y cómo debe comunicarse con Mock Payment Service.
+            </p>
+
+            <p>
+                StreamBox Demo representa una aplicación principal. Mock Payment Service representa
+                la pasarela de pagos simulada. Para que el flujo funcione, ambos servicios deben poder
+                llamarse entre sí.
+            </p>
+
+            <div class="docs-callout">
+                Regla principal: el navegador usa <code>localhost</code>, pero un contenedor debe llamar
+                a otro contenedor usando el nombre del servicio o del contenedor dentro de la red Docker.
+            </div>
+
+            <h2 id="idea-central">Idea central</h2>
+
+            <pre><code>Navegador
+  ↓
+http://localhost:8080/
+  ↓
+StreamBox Demo container
+  ↓ llama al proveedor simulado
+http://mock-payment-service:9090
+  ↓
+Mock Payment Service container
+  ↓ envía webhook
+http://subscription-demo-app:8080/api/webhooks/mock-payment</code></pre>
+
+            <p>
+                Hay dos tipos de URLs importantes:
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>URL</th>
+                    <th>Quién la usa</th>
+                    <th>Ejemplo</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>URL pública</td>
+                    <td>Tu navegador en Windows.</td>
+                    <td><code>http://localhost:8080</code></td>
+                </tr>
+                <tr>
+                    <td>URL interna Docker</td>
+                    <td>Un contenedor llamando a otro contenedor.</td>
+                    <td><code>http://mock-payment-service:9090</code></td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h2 id="puertos">Puertos</h2>
+
+            <p>
+                StreamBox Demo escucha internamente en el puerto:
+            </p>
+
+            <pre><code>8080</code></pre>
+
+            <p>
+                Docker puede publicar ese puerto interno en otro puerto de la máquina host.
+            </p>
+
+            <pre><code>ports:
+  - "${DEMO_APP_HOST_PORT:-8080}:8080"</code></pre>
+
+            <p>
+                La parte izquierda es el puerto de tu máquina. La parte derecha es el puerto interno del contenedor.
+            </p>
+
+            <pre><code>"8085:8080"
+
+8085 → puerto en Windows / navegador
+8080 → puerto dentro del contenedor</code></pre>
+
+            <h3>Ejemplo con puerto por defecto</h3>
+
+            <pre><code>docker compose up --build</code></pre>
+
+            <p>Abrir:</p>
+
+            <pre><code>http://localhost:8080/</code></pre>
+
+            <h3>Ejemplo con puerto personalizado</h3>
+
+            <pre><code>DEMO_APP_HOST_PORT=8085 docker compose up --build</code></pre>
+
+            <p>Abrir:</p>
+
+            <pre><code>http://localhost:8085/</code></pre>
+
+            <div class="docs-callout">
+                Aunque StreamBox se publique en <code>8085</code>, dentro de Docker sigue escuchando
+                en <code>8080</code>. Por eso Mock Payment Service debe enviar webhooks a
+                <code>http://subscription-demo-app:8080</code>.
+            </div>
+
+            <h2 id="variables">Variables principales</h2>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Variable</th>
+                    <th>Uso</th>
+                    <th>Valor típico</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>DEMO_APP_HOST_PORT</code></td>
+                    <td>Puerto publicado en la máquina host.</td>
+                    <td><code>8080</code> o <code>8085</code></td>
+                </tr>
+                <tr>
+                    <td><code>MOCK_PAYMENT_BASE_URL</code></td>
+                    <td>URL que StreamBox usa para llamar a Mock Payment Service.</td>
+                    <td><code>http://mock-payment-service:9090</code></td>
+                </tr>
+                <tr>
+                    <td><code>MOCK_PAYMENT_WEBHOOK_SECRET</code></td>
+                    <td>Secret usado para validar webhooks recibidos.</td>
+                    <td><code>dev-secret</code></td>
+                </tr>
+                <tr>
+                    <td><code>DEMO_APP_PUBLIC_BASE_URL</code></td>
+                    <td>URL pública de StreamBox para navegador o links visibles.</td>
+                    <td><code>http://localhost:8080</code></td>
+                </tr>
+                <tr>
+                    <td><code>DEMO_APP_WEBHOOK_BASE_URL</code></td>
+                    <td>URL interna que Mock Payment Service usa para enviar webhooks a StreamBox.</td>
+                    <td><code>http://subscription-demo-app:8080</code></td>
+                </tr>
+                <tr>
+                    <td><code>DEMO_APP_STORAGE_TYPE</code></td>
+                    <td>Tipo de persistencia del estado interno.</td>
+                    <td><code>file</code> o <code>memory</code></td>
+                </tr>
+                <tr>
+                    <td><code>DEMO_APP_STORAGE_FILE_PATH</code></td>
+                    <td>Ruta del archivo de estado dentro del contenedor.</td>
+                    <td><code>/app/data/subscription-demo-state.bin</code></td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h2 id="red">Red Docker compartida</h2>
+
+            <p>
+                Si StreamBox Demo y Mock Payment Service corren en contenedores separados,
+                ambos deben estar en la misma red Docker.
+            </p>
+
+            <p>
+                Crear la red una sola vez:
+            </p>
+
+            <pre><code>docker network create payment-demo-network</code></pre>
+
+            <p>
+                En el <code>docker-compose.yml</code> de StreamBox:
+            </p>
+
+            <pre><code>networks:
+  - payment-demo-network
+
+networks:
+  payment-demo-network:
+    external: true</code></pre>
+
+            <p>
+                En el <code>docker-compose.yml</code> de Mock Payment Service también debe aparecer
+                la misma red externa.
+            </p>
+
+            <h2 id="mock-base-url">MOCK_PAYMENT_BASE_URL</h2>
+
+            <p>
+                Esta variable le dice a StreamBox dónde está Mock Payment Service.
+            </p>
+
+            <h3>Cuando StreamBox corre en Docker</h3>
+
+            <p>
+                Debe usar el nombre del servicio dentro de la red Docker:
+            </p>
+
+            <pre><code>MOCK_PAYMENT_BASE_URL=http://mock-payment-service:9090</code></pre>
+
+            <p>
+                No debe usar:
+            </p>
+
+            <pre><code>MOCK_PAYMENT_BASE_URL=http://localhost:9090</code></pre>
+
+            <p>
+                Porque dentro del contenedor de StreamBox, <code>localhost</code> significa el propio
+                contenedor de StreamBox, no Mock Payment Service.
+            </p>
+
+            <h3>Cuando StreamBox corre en la máquina host</h3>
+
+            <p>
+                Si StreamBox se ejecuta directamente con Maven en Windows y Mock Payment Service está
+                publicado en el puerto <code>9090</code>, entonces sí puede usar:
+            </p>
+
+            <pre><code>MOCK_PAYMENT_BASE_URL=http://localhost:9090</code></pre>
+
+            <h2 id="webhook-base-url">DEMO_APP_WEBHOOK_BASE_URL</h2>
+
+            <p>
+                Esta variable define la URL que StreamBox le entrega a Mock Payment Service como
+                endpoint para recibir webhooks.
+            </p>
+
+            <p>
+                En Docker, Mock Payment Service debe poder llamar a StreamBox por nombre de contenedor:
+            </p>
+
+            <pre><code>DEMO_APP_WEBHOOK_BASE_URL=http://subscription-demo-app:8080</code></pre>
+
+            <p>
+                Entonces StreamBox construye el webhook URL final así:
+            </p>
+
+            <pre><code>http://subscription-demo-app:8080/api/webhooks/mock-payment</code></pre>
+
+            <h3>Por qué no usar localhost acá</h3>
+
+            <p>
+                Si Mock Payment Service corre en Docker y recibe este webhook URL:
+            </p>
+
+            <pre><code>http://localhost:8080/api/webhooks/mock-payment</code></pre>
+
+            <p>
+                va a intentar llamar al puerto <code>8080</code> dentro de su propio contenedor.
+                Eso no es StreamBox.
+            </p>
+
+            <p>
+                En cambio, debe usar:
+            </p>
+
+            <pre><code>http://subscription-demo-app:8080/api/webhooks/mock-payment</code></pre>
+
+            <h2 id="public-base-url">DEMO_APP_PUBLIC_BASE_URL</h2>
+
+            <p>
+                Esta variable representa la URL pública de StreamBox para el navegador.
+            </p>
+
+            <pre><code>DEMO_APP_PUBLIC_BASE_URL=http://localhost:8080</code></pre>
+
+            <p>
+                Si publicás StreamBox en otro puerto:
+            </p>
+
+            <pre><code>DEMO_APP_HOST_PORT=8085</code></pre>
+
+            <p>
+                entonces conviene usar:
+            </p>
+
+            <pre><code>DEMO_APP_PUBLIC_BASE_URL=http://localhost:8085</code></pre>
+
+            <p>
+                Esta URL es distinta de la URL interna de webhook.
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Variable</th>
+                    <th>Valor con puerto 8085</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>DEMO_APP_PUBLIC_BASE_URL</code></td>
+                    <td><code>http://localhost:8085</code></td>
+                </tr>
+                <tr>
+                    <td><code>DEMO_APP_WEBHOOK_BASE_URL</code></td>
+                    <td><code>http://subscription-demo-app:8080</code></td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h2 id="storage">Persistencia</h2>
+
+            <p>
+                StreamBox Demo puede guardar su estado interno en memoria o en archivo.
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Modo</th>
+                    <th>Descripción</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>memory</code></td>
+                    <td>El estado se pierde al reiniciar.</td>
+                </tr>
+                <tr>
+                    <td><code>file</code></td>
+                    <td>El estado se guarda en archivo y sobrevive a reinicios.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h3>Configuración típica en Docker</h3>
+
+            <pre><code>DEMO_APP_STORAGE_TYPE=file
+DEMO_APP_STORAGE_FILE_PATH=/app/data/subscription-demo-state.bin</code></pre>
+
+            <p>
+                Con volumen:
+            </p>
+
+            <pre><code>volumes:
+  - ./data:/app/data</code></pre>
+
+            <p>
+                El archivo queda persistido en:
+            </p>
+
+            <pre><code>./data/subscription-demo-state.bin</code></pre>
+
+            <div class="docs-callout">
+                La carpeta <code>data/</code> no debería commitearse. Es estado local de desarrollo.
+            </div>
+
+            <h2 id="casos">Casos frecuentes</h2>
+
+            <h3>Caso 1: ambos servicios con puertos por defecto</h3>
+
+            <pre><code>Mock Payment Service:
+http://localhost:9090/studio/
+
+StreamBox Demo:
+http://localhost:8080/</code></pre>
+
+            <p>Variables típicas de StreamBox:</p>
+
+            <pre><code>MOCK_PAYMENT_BASE_URL=http://mock-payment-service:9090
+MOCK_PAYMENT_WEBHOOK_SECRET=dev-secret
+DEMO_APP_PUBLIC_BASE_URL=http://localhost:8080
+DEMO_APP_WEBHOOK_BASE_URL=http://subscription-demo-app:8080</code></pre>
+
+            <h3>Caso 2: StreamBox publicado en 8085</h3>
+
+            <pre><code>DEMO_APP_HOST_PORT=8085 docker compose up --build</code></pre>
+
+            <p>Abrir:</p>
+
+            <pre><code>http://localhost:8085/</code></pre>
+
+            <p>Variables recomendadas:</p>
+
+            <pre><code>DEMO_APP_PUBLIC_BASE_URL=http://localhost:8085
+DEMO_APP_WEBHOOK_BASE_URL=http://subscription-demo-app:8080
+MOCK_PAYMENT_BASE_URL=http://mock-payment-service:9090</code></pre>
+
+            <h3>Caso 3: Mock Payment Service publicado en 9095</h3>
+
+            <p>
+                Desde el navegador, Mock Payment Studio se abre en:
+            </p>
+
+            <pre><code>http://localhost:9095/studio/</code></pre>
+
+            <p>
+                Pero StreamBox en Docker debe seguir usando:
+            </p>
+
+            <pre><code>MOCK_PAYMENT_BASE_URL=http://mock-payment-service:9090</code></pre>
+
+            <h3>Caso 4: StreamBox corre en host y Mock en Docker</h3>
+
+            <p>
+                Si StreamBox corre con Maven directamente en la máquina host:
+            </p>
+
+            <pre><code>MOCK_PAYMENT_BASE_URL=http://localhost:9090</code></pre>
+
+            <p>
+                Pero Mock Payment Service, para enviar webhooks hacia la app en host, debería recibir:
+            </p>
+
+            <pre><code>DEMO_APP_WEBHOOK_BASE_URL=http://host.docker.internal:8080</code></pre>
+
+            <p>
+                El webhook final sería:
+            </p>
+
+            <pre><code>http://host.docker.internal:8080/api/webhooks/mock-payment</code></pre>
+
+            <h2 id="errores">Errores comunes</h2>
+
+            <h3>StreamBox no puede llamar a Mock Payment Service</h3>
+
+            <p>Revisar que StreamBox no esté usando:</p>
+
+            <pre><code>MOCK_PAYMENT_BASE_URL=http://localhost:9090</code></pre>
+
+            <p>Si corre en Docker, debe usar:</p>
+
+            <pre><code>MOCK_PAYMENT_BASE_URL=http://mock-payment-service:9090</code></pre>
+
+            <h3>Mock Payment Service no puede entregar webhooks</h3>
+
+            <p>Revisar que StreamBox no haya enviado como notification URL:</p>
+
+            <pre><code>http://localhost:8080/api/webhooks/mock-payment</code></pre>
+
+            <p>Si ambos corren en Docker, debería ser:</p>
+
+            <pre><code>http://subscription-demo-app:8080/api/webhooks/mock-payment</code></pre>
+
+            <h3>Firma inválida</h3>
+
+            <p>
+                Revisar que ambos servicios usen el mismo secret:
+            </p>
+
+            <pre><code>MOCK_PAYMENT_WEBHOOK_SECRET=dev-secret</code></pre>
+
+            <h3>El estado viejo aparece después de reiniciar</h3>
+
+            <p>
+                Si usás storage <code>file</code>, StreamBox conserva estado en:
+            </p>
+
+            <pre><code>./data/</code></pre>
+
+            <p>
+                Para limpiar:
+            </p>
+
+            <pre><code>docker compose down
+rm -rf data
+docker compose up --build</code></pre>
+
+            <p>
+                O usar el botón:
+            </p>
+
+            <pre><code>Resetear demo</code></pre>
+
+            <h2 id="checklist">Checklist de configuración</h2>
+
+            <ol>
+                <li>Docker Desktop está corriendo.</li>
+                <li>Existe la red <code>payment-demo-network</code>.</li>
+                <li>Mock Payment Service está levantado.</li>
+                <li>StreamBox Demo está levantado.</li>
+                <li>Ambos contenedores están en la misma red.</li>
+                <li>StreamBox usa <code>MOCK_PAYMENT_BASE_URL=http://mock-payment-service:9090</code>.</li>
+                <li>StreamBox usa <code>DEMO_APP_WEBHOOK_BASE_URL=http://subscription-demo-app:8080</code>.</li>
+                <li>El secret coincide en ambos servicios.</li>
+                <li>El navegador abre StreamBox con el puerto publicado correcto.</li>
+                <li>El navegador abre Mock Payment Studio con el puerto publicado correcto.</li>
+            </ol>
+
+            <div class="docs-callout">
+                Si la integración falla, casi siempre el problema está en una de estas tres cosas:
+                uso incorrecto de <code>localhost</code>, contenedores en redes distintas o secrets diferentes.
+            </div>
+        </main>
+    </div>
+</div>
+</body>
+</html>

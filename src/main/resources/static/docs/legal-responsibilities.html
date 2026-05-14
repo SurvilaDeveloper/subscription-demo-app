@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Responsabilidades legales · StreamBox Demo</title>
+    <link rel="stylesheet" href="./docs.css" />
+</head>
+<body>
+<div class="docs-shell">
+    <header class="docs-header">
+        <div class="docs-brand">
+            <h1>Responsabilidades legales</h1>
+        </div>
+
+        <nav class="docs-actions" aria-label="Acciones">
+            <a class="docs-button" href="./index.html">Docs</a>
+            <a class="docs-button" href="../index.html">StreamBox</a>
+        </nav>
+    </header>
+
+    <div class="docs-layout">
+        <aside class="docs-toc">
+            <strong>Contenido</strong>
+            <a href="#aviso">Aviso importante</a>
+            <a href="#objetivo">Objetivo</a>
+            <a href="#que-cambia">Qué cambia al cobrar</a>
+            <a href="#datos">Datos que conviene registrar</a>
+            <a href="#no-guardar">Qué no guardar</a>
+            <a href="#consentimiento">Consentimiento e información</a>
+            <a href="#privacidad">Privacidad</a>
+            <a href="#facturacion">Facturación</a>
+            <a href="#webhooks">Webhooks como evidencia</a>
+            <a href="#fraude">Fraude y abuso</a>
+            <a href="#incidente">Mala acción de un usuario</a>
+            <a href="#autoridad">Pedido judicial o autoridad</a>
+            <a href="#retencion">Retención de datos</a>
+            <a href="#tecnico">Diseño técnico recomendado</a>
+            <a href="#referencias">Referencias</a>
+            <a href="#checklist">Checklist</a>
+        </aside>
+
+        <main class="docs-content">
+            <h1 id="aviso">Responsabilidades legales, privacidad y prevención de fraude</h1>
+
+            <div class="docs-callout">
+                Esta guía es educativa y orientativa para desarrolladores. No reemplaza el asesoramiento
+                de un abogado, contador, especialista en seguridad, especialista en compliance o profesional
+                habilitado según el país, el negocio y el caso concreto.
+            </div>
+
+            <p>
+                StreamBox Demo es una aplicación educativa que simula una plataforma que vende suscripciones.
+                Aunque usa pagos ficticios, sirve para pensar qué responsabilidades aparecen cuando una
+                aplicación real permite contratar, pagar, renovar, cancelar o cambiar un plan.
+            </p>
+
+            <p>
+                Las obligaciones reales dependen del país, actividad comercial, tipo de cliente, pasarela
+                usada, datos recolectados, facturación, términos aceptados, políticas de reembolso y riesgos
+                de fraude.
+            </p>
+
+            <h2 id="objetivo">Objetivo de esta guía</h2>
+
+            <p>
+                El objetivo es ayudar al desarrollador a diseñar una aplicación de pagos con trazabilidad,
+                privacidad, evidencia y controles mínimos.
+            </p>
+
+            <p>
+                Una aplicación que cobra debería poder responder preguntas como:
+            </p>
+
+            <ul>
+                <li>¿Qué usuario inició la operación?</li>
+                <li>¿Qué plan, producto o servicio contrató?</li>
+                <li>¿Qué monto y moneda se le informó?</li>
+                <li>¿Qué términos aceptó?</li>
+                <li>¿Qué proveedor de pagos se usó?</li>
+                <li>¿Qué ID externo devolvió la pasarela?</li>
+                <li>¿Qué webhook llegó?</li>
+                <li>¿La firma del webhook fue válida?</li>
+                <li>¿Qué estado interno tenía antes y después?</li>
+                <li>¿Qué comprobante o factura corresponde?</li>
+                <li>¿Qué ocurrió ante un reclamo, contracargo o sospecha de fraude?</li>
+            </ul>
+
+            <h2 id="que-cambia">Qué cambia cuando una aplicación permite cobrar</h2>
+
+            <p>
+                Cobrar no es solamente agregar un botón de pago. Aparecen responsabilidades nuevas:
+                información al usuario, privacidad, seguridad, trazabilidad, facturación, soporte, reclamos,
+                cancelaciones y prevención de fraude.
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Tema</th>
+                    <th>Riesgo</th>
+                    <th>Qué debería prever la app</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>Precio y plan</td>
+                    <td>El usuario reclama que no entendió qué contrató.</td>
+                    <td>Mostrar plan, precio, moneda, frecuencia y condiciones antes de pagar.</td>
+                </tr>
+                <tr>
+                    <td>Suscripciones</td>
+                    <td>Renovaciones inesperadas o cancelaciones confusas.</td>
+                    <td>Explicar frecuencia, renovación, cancelación y efectos de baja.</td>
+                </tr>
+                <tr>
+                    <td>Pagos</td>
+                    <td>Pagos duplicados, rechazados o pendientes mal interpretados.</td>
+                    <td>Estados internos claros e idempotencia.</td>
+                </tr>
+                <tr>
+                    <td>Datos personales</td>
+                    <td>Recolectar, exponer o retener datos sin criterio.</td>
+                    <td>Minimización, seguridad y política de privacidad.</td>
+                </tr>
+                <tr>
+                    <td>Webhooks</td>
+                    <td>Eventos falsos, duplicados o manipulados.</td>
+                    <td>Validar firma, registrar eventos y consultar al proveedor.</td>
+                </tr>
+                <tr>
+                    <td>Fraude</td>
+                    <td>Cuentas falsas, tarjetas robadas, abuso o contracargos.</td>
+                    <td>Límites, auditoría, alertas y revisión manual cuando corresponda.</td>
+                </tr>
+                <tr>
+                    <td>Autoridad o reclamo</td>
+                    <td>No poder reconstruir qué pasó.</td>
+                    <td>Logs, registros, IDs externos y eventos de auditoría.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h2 id="datos">Datos que conviene registrar</h2>
+
+            <p>
+                Una aplicación real debería registrar lo necesario para operar, auditar, atender soporte,
+                investigar incidentes y responder reclamos.
+            </p>
+
+            <div class="docs-callout">
+                No se trata de guardar todo. Se trata de guardar lo necesario, con propósito claro,
+                acceso controlado, seguridad adecuada y política de retención.
+            </div>
+
+            <h3>Datos útiles de una suscripción</h3>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Dato</th>
+                    <th>Para qué sirve</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>ID interno de usuario o negocio</td>
+                    <td>Relacionar la suscripción con una cuenta real.</td>
+                </tr>
+                <tr>
+                    <td>ID interno de suscripción</td>
+                    <td>Identificador propio de la aplicación.</td>
+                </tr>
+                <tr>
+                    <td>ID externo de suscripción</td>
+                    <td>Relacionar la suscripción interna con la pasarela.</td>
+                </tr>
+                <tr>
+                    <td>Plan contratado</td>
+                    <td>Reconstruir qué compró el usuario.</td>
+                </tr>
+                <tr>
+                    <td>Monto y moneda</td>
+                    <td>Auditar el valor informado y cobrado.</td>
+                </tr>
+                <tr>
+                    <td>Frecuencia</td>
+                    <td>Explicar renovación mensual, anual u otra modalidad.</td>
+                </tr>
+                <tr>
+                    <td>Estado interno</td>
+                    <td>Determinar si el servicio está activo, pendiente, fallido o cancelado.</td>
+                </tr>
+                <tr>
+                    <td>Fecha de alta, cambio y cancelación</td>
+                    <td>Reconstruir el ciclo de vida de la suscripción.</td>
+                </tr>
+                <tr>
+                    <td>Versión de términos aceptada</td>
+                    <td>Demostrar qué condiciones estaban vigentes.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h3>Datos útiles de un pago</h3>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Dato</th>
+                    <th>Para qué sirve</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>ID interno de pago</td>
+                    <td>Identificador propio de la aplicación.</td>
+                </tr>
+                <tr>
+                    <td>ID externo de pago</td>
+                    <td>Consultar o reclamar ante la pasarela.</td>
+                </tr>
+                <tr>
+                    <td>Proveedor</td>
+                    <td>Saber qué pasarela procesó la operación.</td>
+                </tr>
+                <tr>
+                    <td>Estado externo</td>
+                    <td>Conservar el estado original del proveedor.</td>
+                </tr>
+                <tr>
+                    <td>Estado interno</td>
+                    <td>Usar un vocabulario propio para la lógica de negocio.</td>
+                </tr>
+                <tr>
+                    <td>Status detail</td>
+                    <td>Entender por qué un pago fue rechazado o quedó pendiente.</td>
+                </tr>
+                <tr>
+                    <td>Monto y moneda</td>
+                    <td>Auditar importes.</td>
+                </tr>
+                <tr>
+                    <td>Fecha y hora UTC</td>
+                    <td>Comparar eventos entre sistemas.</td>
+                </tr>
+                <tr>
+                    <td>Request ID o correlation ID</td>
+                    <td>Rastrear una operación entre servicios.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h3>Datos útiles de un webhook</h3>
+
+            <ul>
+                <li>Proveedor.</li>
+                <li>ID del evento del proveedor.</li>
+                <li>Request ID.</li>
+                <li>Tipo de evento.</li>
+                <li>Acción.</li>
+                <li>Data ID.</li>
+                <li>Payload recibido, si no contiene datos sensibles innecesarios.</li>
+                <li>Resultado de validación de firma.</li>
+                <li>Fecha de recepción.</li>
+                <li>Fecha de procesamiento.</li>
+                <li>Error de procesamiento, si ocurrió.</li>
+                <li>Estado final aplicado por la aplicación.</li>
+            </ul>
+
+            <h2 id="no-guardar">Qué no conviene guardar</h2>
+
+            <p>
+                Guardar datos innecesarios también genera riesgo. Una aplicación de pagos debe minimizar
+                datos sensibles.
+            </p>
+
+            <h3>No guardar en la aplicación principal</h3>
+
+            <ul>
+                <li>Número completo de tarjeta.</li>
+                <li>CVV o código de seguridad.</li>
+                <li>Credenciales productivas en texto plano.</li>
+                <li>Tokens de acceso sin protección.</li>
+                <li>Secrets en logs.</li>
+                <li>Payloads completos si contienen datos sensibles innecesarios.</li>
+                <li>Datos personales “por si algún día sirven”.</li>
+                <li>Información de identidad si no es necesaria para el servicio.</li>
+            </ul>
+
+            <div class="docs-callout">
+                Para pagos reales, conviene usar checkout hospedado, tokenización o componentes seguros
+                del proveedor para evitar que la aplicación toque datos completos de tarjeta.
+            </div>
+
+            <h2 id="consentimiento">Consentimiento e información al usuario</h2>
+
+            <p>
+                Antes de pagar, el usuario debería entender claramente qué está contratando.
+            </p>
+
+            <h3>Información que conviene mostrar antes del pago</h3>
+
+            <ul>
+                <li>Nombre del plan.</li>
+                <li>Precio final.</li>
+                <li>Moneda.</li>
+                <li>Periodicidad de cobro.</li>
+                <li>Fecha o condición de renovación.</li>
+                <li>Qué incluye el plan.</li>
+                <li>Qué pasa si el pago falla.</li>
+                <li>Cómo cancelar.</li>
+                <li>Política de reembolsos.</li>
+                <li>Términos y condiciones.</li>
+                <li>Política de privacidad.</li>
+                <li>Canal de soporte.</li>
+            </ul>
+
+            <h3>Qué conviene registrar</h3>
+
+            <ul>
+                <li>ID del usuario.</li>
+                <li>Fecha y hora de aceptación.</li>
+                <li>Versión de términos aceptada.</li>
+                <li>Versión de política de privacidad informada o aceptada.</li>
+                <li>IP o user-agent si se usa con finalidad legítima y está informado.</li>
+                <li>Texto, hash o identificador de la versión vigente.</li>
+            </ul>
+
+            <h2 id="privacidad">Privacidad</h2>
+
+            <p>
+                Si la aplicación guarda email, nombre, teléfono, IP, identificadores de cuenta, historial
+                de pagos o datos de facturación, está tratando datos personales.
+            </p>
+
+            <p>
+                Como criterio general, una aplicación debería:
+            </p>
+
+            <ul>
+                <li>Recolectar solo los datos necesarios.</li>
+                <li>Informar para qué se usan.</li>
+                <li>Protegerlos con controles técnicos y organizativos.</li>
+                <li>Limitar el acceso interno.</li>
+                <li>No usarlos para fines incompatibles con lo informado.</li>
+                <li>No conservarlos indefinidamente sin razón.</li>
+                <li>Tener un procedimiento para responder pedidos legítimos del titular de datos.</li>
+            </ul>
+
+            <h3>En StreamBox Demo</h3>
+
+            <p>
+                La demo usa <code>payerEmail</code> como dato educativo. En una aplicación real, ese email
+                debería formar parte de un modelo de usuario o cliente, con privacidad y seguridad adecuadas.
+            </p>
+
+            <h2 id="facturacion">Facturación y comprobantes</h2>
+
+            <p>
+                En una aplicación real, cobrar puede implicar emitir comprobantes, registrar operaciones,
+                gestionar impuestos, emitir notas de crédito o relacionar pagos con facturas.
+            </p>
+
+            <p>
+                Esto no debería resolverse solamente desde programación. Normalmente hay que consultar
+                con un contador o asesor fiscal según el país, el tipo de actividad y el modelo de negocio.
+            </p>
+
+            <h3>Qué debería prever técnicamente la aplicación</h3>
+
+            <ul>
+                <li>Relacionar pago con orden, usuario o suscripción.</li>
+                <li>Guardar monto, moneda y concepto.</li>
+                <li>Guardar estado de facturación.</li>
+                <li>Guardar ID o número de comprobante emitido.</li>
+                <li>Permitir reenviar comprobantes.</li>
+                <li>Registrar reembolsos o notas de crédito si corresponde.</li>
+                <li>Distinguir entre pago aprobado y comprobante emitido.</li>
+            </ul>
+
+            <h2 id="webhooks">Webhooks como evidencia técnica</h2>
+
+            <p>
+                Los webhooks son importantes porque muchas confirmaciones de pago llegan de forma asincrónica.
+                La aplicación debería registrarlos con cuidado.
+            </p>
+
+            <h3>Buenas prácticas</h3>
+
+            <ol>
+                <li>Guardar el webhook recibido antes o durante el procesamiento.</li>
+                <li>Validar firma u origen.</li>
+                <li>Guardar si la firma fue válida.</li>
+                <li>Consultar el recurso actualizado al proveedor.</li>
+                <li>Actualizar el estado interno en una transacción.</li>
+                <li>Marcar el webhook como procesado o fallido.</li>
+                <li>Evitar procesar dos veces el mismo evento.</li>
+            </ol>
+
+            <h3>Por qué es importante</h3>
+
+            <p>
+                Ante un reclamo o investigación, el sistema puede reconstruir:
+            </p>
+
+            <ul>
+                <li>Qué evento llegó.</li>
+                <li>Cuándo llegó.</li>
+                <li>Si la firma era válida.</li>
+                <li>Qué recurso externo se consultó.</li>
+                <li>Qué cambio interno se aplicó.</li>
+                <li>Si hubo error o reproceso.</li>
+            </ul>
+
+            <h2 id="fraude">Fraude y abuso</h2>
+
+            <p>
+                Una aplicación que permite pagar puede recibir usuarios legítimos, usuarios confundidos,
+                atacantes o intentos de abuso.
+            </p>
+
+            <h3>Señales de riesgo</h3>
+
+            <ul>
+                <li>Muchos intentos de pago fallidos desde la misma cuenta.</li>
+                <li>Muchas cuentas creadas desde la misma IP o dispositivo.</li>
+                <li>Uso repetido de tarjetas rechazadas.</li>
+                <li>Cambios frecuentes de email o datos de facturación.</li>
+                <li>Alta velocidad de operaciones.</li>
+                <li>Reembolsos sospechosos.</li>
+                <li>Contracargos repetidos.</li>
+                <li>Uso de datos inconsistentes.</li>
+            </ul>
+
+            <h3>Controles técnicos razonables</h3>
+
+            <ul>
+                <li>Rate limiting.</li>
+                <li>Límites de intentos de pago.</li>
+                <li>Validación de email.</li>
+                <li>Alertas ante actividad sospechosa.</li>
+                <li>Bloqueos temporales.</li>
+                <li>Revisión manual de operaciones críticas.</li>
+                <li>Registro de eventos de seguridad.</li>
+                <li>Uso de herramientas antifraude de la pasarela.</li>
+                <li>Controles de permisos en paneles internos.</li>
+            </ul>
+
+            <h2 id="incidente">Cómo actuar ante una mala acción de un usuario</h2>
+
+            <p>
+                Si se detecta abuso, fraude, intento de estafa, uso de datos ajenos o manipulación del sistema,
+                conviene actuar de forma ordenada.
+            </p>
+
+            <h3>Buenas prácticas generales</h3>
+
+            <ol>
+                <li>No borrar evidencia inmediatamente.</li>
+                <li>No modificar registros históricos sin auditoría.</li>
+                <li>No acusar públicamente al usuario.</li>
+                <li>Preservar logs relevantes.</li>
+                <li>Bloquear o limitar preventivamente si hay riesgo.</li>
+                <li>Registrar la razón de la medida tomada.</li>
+                <li>Revisar términos y condiciones aceptados.</li>
+                <li>Contactar a la pasarela si hay disputa, contracargo o pago sospechoso.</li>
+                <li>Escalar a soporte, administración o asesoría legal según gravedad.</li>
+                <li>Denunciar ante autoridad competente si corresponde.</li>
+            </ol>
+
+            <h3>Evento interno sugerido</h3>
+
+            <pre><code>{
+  "event_type": "ACCOUNT_RESTRICTED",
+  "user_id": "user-42",
+  "reason": "Multiple suspicious payment attempts",
+  "performed_by": "system",
+  "created_at": "2026-05-14T12:00:00Z",
+  "related_payment_ids": ["pay-1", "pay-2", "pay-3"]
+}</code></pre>
+
+            <div class="docs-callout">
+                Una medida preventiva debería ser proporcional, registrable y revisable. Si el caso es sensible,
+                conviene consultar asesoría legal antes de tomar medidas definitivas.
+            </div>
+
+            <h2 id="autoridad">Pedido judicial o requerimiento de autoridad</h2>
+
+            <p>
+                Si llega un pedido judicial o requerimiento de autoridad, no conviene responder informalmente
+                ni entregar datos sin revisar el alcance.
+            </p>
+
+            <h3>Cómo actuar en general</h3>
+
+            <ol>
+                <li>Verificar que el pedido sea formal.</li>
+                <li>No entregar más información que la solicitada.</li>
+                <li>No alterar ni borrar registros relacionados.</li>
+                <li>Preservar evidencia relevante.</li>
+                <li>Registrar internamente la recepción del pedido.</li>
+                <li>Consultar a un abogado o responsable legal.</li>
+                <li>Responder por canales formales.</li>
+                <li>Documentar qué información se entregó y cuándo.</li>
+            </ol>
+
+            <h3>Información que podría ser útil preservar</h3>
+
+            <ul>
+                <li>Datos de cuenta involucrada.</li>
+                <li>Suscripciones relacionadas.</li>
+                <li>Pagos relacionados.</li>
+                <li>IDs externos de la pasarela.</li>
+                <li>Webhooks recibidos.</li>
+                <li>Eventos de auditoría.</li>
+                <li>Fechas y horas en UTC.</li>
+                <li>Registros de términos aceptados.</li>
+                <li>Comprobantes emitidos si corresponde.</li>
+            </ul>
+
+            <div class="docs-callout">
+                Preservar evidencia no significa compartirla informalmente. Significa evitar que se pierda
+                o se altere mientras se evalúa el pedido formal.
+            </div>
+
+            <h2 id="retencion">Retención de datos</h2>
+
+            <p>
+                No todos los datos deberían guardarse para siempre, pero tampoco todos pueden borrarse
+                inmediatamente si son necesarios para facturación, reclamos, auditoría, seguridad o cumplimiento.
+            </p>
+
+            <h3>Criterios a definir</h3>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Dato</th>
+                    <th>Criterio posible</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>Pagos</td>
+                    <td>Retener según obligaciones fiscales, soporte y reclamos.</td>
+                </tr>
+                <tr>
+                    <td>Suscripciones</td>
+                    <td>Retener mientras exista relación comercial y luego según política definida.</td>
+                </tr>
+                <tr>
+                    <td>Webhooks</td>
+                    <td>Retener para idempotencia, auditoría y diagnóstico.</td>
+                </tr>
+                <tr>
+                    <td>Logs técnicos</td>
+                    <td>Rotar y conservar por un período limitado.</td>
+                </tr>
+                <tr>
+                    <td>Eventos de seguridad</td>
+                    <td>Retener según riesgo e investigaciones posibles.</td>
+                </tr>
+                <tr>
+                    <td>Datos de cuenta</td>
+                    <td>Permitir baja o eliminación cuando corresponda, preservando lo legalmente necesario.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h2 id="tecnico">Diseño técnico recomendado</h2>
+
+            <p>
+                Una aplicación de pagos debería diseñarse para ser trazable, segura e idempotente.
+            </p>
+
+            <h3>Tablas sugeridas</h3>
+
+            <pre><code>users
+business_subscriptions
+business_payments
+payment_webhook_events
+payment_audit_events
+terms_acceptances
+security_events</code></pre>
+
+            <h3>Constraints sugeridos</h3>
+
+            <pre><code>UNIQUE(provider_subscription_id)
+UNIQUE(provider_payment_id)
+UNIQUE(provider_event_id)
+UNIQUE(request_id)</code></pre>
+
+            <h3>Buenas prácticas técnicas</h3>
+
+            <ul>
+                <li>Usar HTTPS en producción.</li>
+                <li>Validar firma de webhooks.</li>
+                <li>Procesar webhooks con idempotencia.</li>
+                <li>Guardar IDs externos.</li>
+                <li>No guardar tarjetas reales.</li>
+                <li>No guardar CVV.</li>
+                <li>Usar variables de entorno para credenciales.</li>
+                <li>No imprimir secrets en logs.</li>
+                <li>Usar transacciones de base de datos.</li>
+                <li>Registrar auditoría de cambios importantes.</li>
+                <li>Proteger endpoints administrativos.</li>
+            </ul>
+
+            <h2 id="referencias">Referencias útiles</h2>
+
+            <p>
+                Estas referencias son puntos de partida. La normativa aplicable puede variar según país,
+                actividad, tipo de cliente y modelo de negocio.
+            </p>
+
+            <ul>
+                <li>
+                    <a href="https://servicios.infoleg.gob.ar/infolegInternet/anexos/60000-64999/64790/texact.htm" target="_blank" rel="noreferrer">
+                        Ley 25.326 de Protección de Datos Personales - Infoleg
+                    </a>
+                </li>
+                <li>
+                    <a href="https://servicios.infoleg.gob.ar/infolegInternet/anexos/0-4999/638/texact.htm" target="_blank" rel="noreferrer">
+                        Ley 24.240 de Defensa del Consumidor - Infoleg
+                    </a>
+                </li>
+                <li>
+                    <a href="https://www.arca.gob.ar/fe/" target="_blank" rel="noreferrer">
+                        ARCA - Factura electrónica
+                    </a>
+                </li>
+                <li>
+                    <a href="https://www.pcisecuritystandards.org/standards/pci-dss/" target="_blank" rel="noreferrer">
+                        PCI DSS - PCI Security Standards Council
+                    </a>
+                </li>
+            </ul>
+
+            <h2 id="checklist">Checklist para desarrolladores</h2>
+
+            <ol>
+                <li>Informar plan, precio, moneda y frecuencia antes de cobrar.</li>
+                <li>Definir términos y condiciones.</li>
+                <li>Definir política de privacidad.</li>
+                <li>Definir política de cancelación y reembolso.</li>
+                <li>Registrar aceptación de términos cuando corresponda.</li>
+                <li>No guardar números completos de tarjeta.</li>
+                <li>No guardar CVV.</li>
+                <li>Usar checkout o tokenización del proveedor.</li>
+                <li>Guardar IDs internos y externos.</li>
+                <li>Guardar webhooks recibidos.</li>
+                <li>Validar firma de webhooks.</li>
+                <li>Consultar el recurso actualizado al proveedor.</li>
+                <li>Procesar webhooks de forma idempotente.</li>
+                <li>Guardar eventos de auditoría.</li>
+                <li>Implementar rate limiting.</li>
+                <li>Agregar alertas ante actividad sospechosa.</li>
+                <li>Proteger paneles administrativos.</li>
+                <li>No mostrar secrets en la UI.</li>
+                <li>No commitear credenciales reales.</li>
+                <li>Consultar abogado para operación comercial real.</li>
+                <li>Consultar contador para facturación e impuestos.</li>
+                <li>Consultar especialista en seguridad si se manejan datos sensibles.</li>
+            </ol>
+
+            <div class="docs-callout">
+                Una buena integración de pagos no es solo técnica. También debe ser clara para el usuario,
+                trazable para el negocio, segura para los datos y auditable ante reclamos o incidentes.
+            </div>
+        </main>
+    </div>
+</div>
+</body>
+</html>

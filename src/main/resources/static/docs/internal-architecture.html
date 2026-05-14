@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Arquitectura interna · StreamBox Demo</title>
+    <link rel="stylesheet" href="./docs.css" />
+</head>
+<body>
+<div class="docs-shell">
+    <header class="docs-header">
+        <div class="docs-brand">
+            <h1>Arquitectura interna</h1>
+        </div>
+
+        <nav class="docs-actions" aria-label="Acciones">
+            <a class="docs-button" href="./index.html">Docs</a>
+            <a class="docs-button" href="../index.html">StreamBox</a>
+        </nav>
+    </header>
+
+    <div class="docs-layout">
+        <aside class="docs-toc">
+            <strong>Contenido</strong>
+            <a href="#objetivo">Objetivo</a>
+            <a href="#vision-general">Visión general</a>
+            <a href="#capas">Capas principales</a>
+            <a href="#ui">UI estática</a>
+            <a href="#controllers">Controllers</a>
+            <a href="#services">Servicios</a>
+            <a href="#client">Cliente del proveedor</a>
+            <a href="#models">Modelos internos</a>
+            <a href="#store">Store interno</a>
+            <a href="#webhooks">Webhooks</a>
+            <a href="#persistencia">Persistencia</a>
+            <a href="#docker">Docker</a>
+            <a href="#produccion">Qué cambiar en producción</a>
+            <a href="#resumen">Resumen</a>
+        </aside>
+
+        <main class="docs-content">
+            <h1 id="objetivo">Arquitectura interna de StreamBox Demo</h1>
+
+            <p>
+                Esta guía explica cómo está organizada StreamBox Demo por dentro.
+                La aplicación representa un sistema principal que vende suscripciones y se integra
+                con una pasarela de pagos simulada: Mock Payment Service.
+            </p>
+
+            <p>
+                La idea es entender qué responsabilidad tiene cada parte del proyecto:
+                la UI, los controllers, los servicios, el cliente HTTP, los modelos internos,
+                el store, los webhooks y la persistencia.
+            </p>
+
+            <div class="docs-callout">
+                StreamBox Demo no es la pasarela de pagos. Es la aplicación que consume una pasarela.
+                Por eso su arquitectura se parece a la que tendría una app real: estado interno propio,
+                cliente hacia proveedor, webhook receiver, validación de firma y mapeo de estados.
+            </div>
+
+            <h2 id="vision-general">Visión general</h2>
+
+            <pre><code>Usuario
+  ↓
+UI estática de StreamBox
+  ↓
+Controllers HTTP
+  ↓
+SubscriptionService
+  ↓
+MockPaymentClient
+  ↓
+Mock Payment Service
+
+Mock Payment Service
+  ↓ webhook firmado
+MockPaymentWebhookController
+  ↓
+WebhookSignatureVerifier
+  ↓
+SubscriptionService
+  ↓
+DemoStore</code></pre>
+
+            <p>
+                StreamBox tiene dos responsabilidades principales:
+            </p>
+
+            <ul>
+                <li>Permitir iniciar y operar suscripciones desde una UI educativa.</li>
+                <li>Mostrar cómo una aplicación real debería mantener su propio estado interno al integrarse con un proveedor de pagos.</li>
+            </ul>
+
+            <h2 id="capas">Capas principales</h2>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Capa</th>
+                    <th>Responsabilidad</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>UI estática</td>
+                    <td>Mostrar estado, formularios, tablas y acciones para operar la demo.</td>
+                </tr>
+                <tr>
+                    <td>Controllers</td>
+                    <td>Exponer endpoints HTTP para la UI y para recibir webhooks.</td>
+                </tr>
+                <tr>
+                    <td>Servicios</td>
+                    <td>Orquestar lógica de suscripciones, pagos, webhooks y cambios de estado.</td>
+                </tr>
+                <tr>
+                    <td>Cliente del proveedor</td>
+                    <td>Encapsular llamadas HTTP hacia Mock Payment Service.</td>
+                </tr>
+                <tr>
+                    <td>Modelos internos</td>
+                    <td>Representar suscripciones, pagos, webhooks recibidos y eventos internos.</td>
+                </tr>
+                <tr>
+                    <td>Store interno</td>
+                    <td>Guardar estado en memoria o archivo para la demo.</td>
+                </tr>
+                <tr>
+                    <td>Persistencia</td>
+                    <td>Conservar el estado local cuando se usa storage tipo archivo.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h2 id="ui">UI estática</h2>
+
+            <p>
+                La UI de StreamBox se sirve como archivos estáticos desde Spring Boot.
+                Permite usar la aplicación sin abrir un IDE ni ejecutar comandos manuales.
+            </p>
+
+            <p>
+                Desde la UI se puede:
+            </p>
+
+            <ul>
+                <li>Ver el estado general de la aplicación principal.</li>
+                <li>Revisar la configuración de integración.</li>
+                <li>Elegir un plan y pagar con tarjeta ficticia.</li>
+                <li>Simular cobros recurrentes.</li>
+                <li>Cambiar plan.</li>
+                <li>Cancelar una suscripción.</li>
+                <li>Ver suscripciones internas.</li>
+                <li>Ver pagos internos.</li>
+                <li>Ver webhooks recibidos.</li>
+                <li>Ver eventos internos.</li>
+                <li>Abrir documentación desde el menú Docs.</li>
+            </ul>
+
+            <div class="docs-callout">
+                La UI no contiene la lógica importante de pagos. La UI llama endpoints de la aplicación
+                y renderiza lo que el backend devuelve.
+            </div>
+
+            <h2 id="controllers">Controllers</h2>
+
+            <p>
+                Los controllers son la entrada HTTP de la aplicación.
+                En StreamBox hay controllers para operar la demo y un controller dedicado para webhooks.
+            </p>
+
+            <h3>Controller de webhooks</h3>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/controller/MockPaymentWebhookController.java</code></pre>
+
+            <p>
+                Este controller recibe eventos enviados por Mock Payment Service en:
+            </p>
+
+            <pre><code>POST /api/webhooks/mock-payment</code></pre>
+
+            <p>
+                Su flujo conceptual es:
+            </p>
+
+            <pre><code>Recibir request HTTP
+  ↓
+Extraer headers
+  ↓
+Extraer payload
+  ↓
+Validar firma
+  ↓
+Guardar webhook recibido
+  ↓
+Delegar procesamiento
+  ↓
+Marcar como procesado o fallido
+  ↓
+Responder al proveedor</code></pre>
+
+            <p>
+                Esta separación es importante porque el controller no debería concentrar toda la lógica
+                de negocio. Su responsabilidad principal es recibir el request y delegar.
+            </p>
+
+            <h2 id="services">Servicios</h2>
+
+            <p>
+                El servicio más importante del flujo de pagos es:
+            </p>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/service/SubscriptionService.java</code></pre>
+
+            <p>
+                Este servicio orquesta casi todo el flujo de suscripciones y pagos: crea suscripciones internas,
+                llama al proveedor, guarda IDs externos, simula pagos, procesa webhooks y actualiza estados.
+                :contentReference[oaicite:1]{index=1}
+            </p>
+
+            <h3>Responsabilidades principales</h3>
+
+            <ul>
+                <li>Crear una suscripción interna.</li>
+                <li>Crear una preapproval en Mock Payment Service.</li>
+                <li>Guardar el <code>providerSubscriptionId</code>.</li>
+                <li>Simular pago inicial.</li>
+                <li>Simular cobros recurrentes.</li>
+                <li>Cambiar plan.</li>
+                <li>Cancelar suscripción.</li>
+                <li>Procesar webhooks.</li>
+                <li>Guardar pagos internos.</li>
+                <li>Mapear estados externos a estados internos.</li>
+                <li>Registrar eventos educativos.</li>
+            </ul>
+
+            <h3>Por qué centralizar esta lógica</h3>
+
+            <p>
+                Porque el flujo de pagos toca varias piezas al mismo tiempo:
+            </p>
+
+            <pre><code>Plan interno
+  ↓
+Suscripción interna
+  ↓
+Proveedor externo
+  ↓
+Pago externo
+  ↓
+Pago interno
+  ↓
+Webhook
+  ↓
+Estado interno</code></pre>
+
+            <p>
+                Si esa lógica estuviera repartida sin orden entre controllers, UI y cliente HTTP,
+                sería mucho más difícil de mantener.
+            </p>
+
+            <h2 id="client">Cliente del proveedor</h2>
+
+            <p>
+                La clase:
+            </p>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/client/MockPaymentClient.java</code></pre>
+
+            <p>
+                encapsula las llamadas HTTP hacia Mock Payment Service usando <code>RestClient</code>.
+                Expone métodos como crear preapproval, consultar pago, pagar con tarjeta, simular cobro recurrente,
+                cambiar plan y cancelar preapproval. :contentReference[oaicite:2]{index=2}
+            </p>
+
+            <h3>Qué problema resuelve</h3>
+
+            <p>
+                Evita que toda la aplicación tenga código como:
+            </p>
+
+            <pre><code>POST /preapproval
+GET /payment/{id}
+POST /mock/preapproval/{id}/pay-with-card</code></pre>
+
+            <p>
+                disperso por distintos lugares.
+            </p>
+
+            <p>
+                En su lugar, el resto del sistema usa métodos con intención clara:
+            </p>
+
+            <pre><code>createPreapproval(...)
+getPayment(...)
+payWithCard(...)
+simulateRecurringCharge(...)
+changePlan(...)
+cancelPreapproval(...)</code></pre>
+
+            <h3>Equivalente en producción</h3>
+
+            <p>
+                En una aplicación real, esta capa podría convertirse en:
+            </p>
+
+            <pre><code>PaymentProviderClient
+MercadoPagoClient
+StripeClient
+PayPalClient</code></pre>
+
+            <p>
+                Incluso usando un SDK oficial, conviene mantener una capa propia para no acoplar toda la
+                aplicación al proveedor.
+            </p>
+
+            <h2 id="models">Modelos internos</h2>
+
+            <p>
+                StreamBox no guarda solamente lo que devuelve Mock Payment Service.
+                Tiene modelos internos propios.
+            </p>
+
+            <h3>DemoSubscription</h3>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/model/DemoSubscription.java</code></pre>
+
+            <p>
+                Representa una suscripción desde el punto de vista de StreamBox.
+                Guarda datos del plan, email del pagador, estado interno y el ID externo del proveedor.
+                :contentReference[oaicite:3]{index=3}
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Campo conceptual</th>
+                    <th>Uso</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>ID interno</td>
+                    <td>Identifica la suscripción dentro de StreamBox.</td>
+                </tr>
+                <tr>
+                    <td>Plan</td>
+                    <td>Guarda el plan elegido por el usuario.</td>
+                </tr>
+                <tr>
+                    <td>Monto y moneda</td>
+                    <td>Permite auditar qué se contrató.</td>
+                </tr>
+                <tr>
+                    <td>Email</td>
+                    <td>Representa al pagador en la demo.</td>
+                </tr>
+                <tr>
+                    <td>Provider subscription ID</td>
+                    <td>Relaciona la suscripción interna con la suscripción externa.</td>
+                </tr>
+                <tr>
+                    <td>Status</td>
+                    <td>Estado interno usado por StreamBox.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h3>DemoPayment</h3>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/model/DemoPayment.java</code></pre>
+
+            <p>
+                Representa un pago interno creado a partir de un pago externo del proveedor.
+                Guarda el ID interno, la suscripción asociada, el ID externo del pago, estado, detalle,
+                monto, moneda y fecha. :contentReference[oaicite:4]{index=4}
+            </p>
+
+            <h3>DemoReceivedWebhook</h3>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/model/DemoReceivedWebhook.java</code></pre>
+
+            <p>
+                Representa un webhook recibido por StreamBox. Guarda request ID, firma, tipo de evento,
+                acción, data ID, si la firma fue válida, si fue procesado y el error si falló.
+                :contentReference[oaicite:5]{index=5}
+            </p>
+
+            <h3>Idea importante</h3>
+
+            <pre><code>Proveedor externo ≠ estado interno de la aplicación</code></pre>
+
+            <p>
+                La aplicación principal necesita sus propias entidades para tomar decisiones de negocio.
+            </p>
+
+            <h2 id="store">Store interno</h2>
+
+            <p>
+                El store interno de la demo está en:
+            </p>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/store/DemoStore.java</code></pre>
+
+            <p>
+                Guarda suscripciones, pagos, eventos y webhooks recibidos. También genera IDs internos
+                y puede persistir el estado en archivo cuando se usa storage tipo <code>file</code>. :contentReference[oaicite:6]{index=6}
+            </p>
+
+            <h3>Qué guarda</h3>
+
+            <ul>
+                <li>Suscripciones internas.</li>
+                <li>Pagos internos.</li>
+                <li>Eventos internos.</li>
+                <li>Webhooks recibidos.</li>
+                <li>Secuencias para generar IDs.</li>
+            </ul>
+
+            <h3>Búsquedas importantes</h3>
+
+            <p>
+                Para procesar webhooks, el store necesita buscar entidades internas usando IDs externos.
+            </p>
+
+            <pre><code>findSubscriptionByProviderSubscriptionId(...)
+findPaymentByProviderPaymentId(...)</code></pre>
+
+            <p>
+                Esto es clave porque los webhooks normalmente no traen IDs internos de la aplicación.
+                Traen IDs del proveedor.
+            </p>
+
+            <h2 id="webhooks">Arquitectura de webhooks</h2>
+
+            <p>
+                Los webhooks conectan el proveedor simulado con la aplicación principal.
+            </p>
+
+            <pre><code>Mock Payment Service
+  ↓
+POST /api/webhooks/mock-payment
+  ↓
+MockPaymentWebhookController
+  ↓
+WebhookSignatureVerifier
+  ↓
+SubscriptionService.processWebhook(...)
+  ↓
+MockPaymentClient.getPayment(...)
+  ↓
+MockPaymentClient.getPreapproval(...)
+  ↓
+DemoStore</code></pre>
+
+            <h3>Validación de firma</h3>
+
+            <p>
+                La firma se valida en:
+            </p>
+
+            <pre><code>src/main/java/com/survila/subscriptiondemo/service/WebhookSignatureVerifier.java</code></pre>
+
+            <p>
+                Esta clase reconstruye el manifest, calcula HMAC SHA-256 con el secret compartido
+                y compara el hash esperado con el recibido. :contentReference[oaicite:7]{index=7}
+            </p>
+
+            <h3>Procesamiento</h3>
+
+            <p>
+                Una vez validado el webhook, StreamBox procesa dos tipos principales:
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Evento</th>
+                    <th>Acción de StreamBox</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>payment.created</code></td>
+                    <td>Consulta el pago, guarda pago interno y actualiza la suscripción.</td>
+                </tr>
+                <tr>
+                    <td><code>preapproval.updated</code></td>
+                    <td>Consulta la suscripción externa y actualiza la suscripción interna.</td>
+                </tr>
+                <tr>
+                    <td><code>preapproval.cancelled</code></td>
+                    <td>Consulta la suscripción externa y marca el estado interno correspondiente.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <div class="docs-callout">
+                La arquitectura correcta no es “recibir webhook y creer todo el body”.
+                La arquitectura correcta es: recibir, validar, registrar, consultar al proveedor y recién ahí actualizar.
+            </div>
+
+            <h2 id="persistencia">Persistencia</h2>
+
+            <p>
+                StreamBox puede trabajar en dos modos:
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Modo</th>
+                    <th>Descripción</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>memory</code></td>
+                    <td>El estado vive en memoria y se pierde al reiniciar.</td>
+                </tr>
+                <tr>
+                    <td><code>file</code></td>
+                    <td>El estado se guarda en un archivo local.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <p>
+                Configuración típica:
+            </p>
+
+            <pre><code>DEMO_APP_STORAGE_TYPE=file
+DEMO_APP_STORAGE_FILE_PATH=/app/data/subscription-demo-state.bin</code></pre>
+
+            <p>
+                En Docker se monta:
+            </p>
+
+            <pre><code>./data:/app/data</code></pre>
+
+            <p>
+                Esta persistencia sirve para la demo. En producción debería reemplazarse por una base de datos.
+            </p>
+
+            <h2 id="docker">Arquitectura con Docker</h2>
+
+            <p>
+                En Docker, StreamBox y Mock Payment Service pueden correr como contenedores separados.
+            </p>
+
+            <pre><code>Navegador
+  ↓
+localhost:8080
+  ↓
+subscription-demo-app:8080
+  ↓
+mock-payment-service:9090</code></pre>
+
+            <p>
+                StreamBox llama al mock con:
+            </p>
+
+            <pre><code>MOCK_PAYMENT_BASE_URL=http://mock-payment-service:9090</code></pre>
+
+            <p>
+                Mock Payment Service llama a StreamBox con:
+            </p>
+
+            <pre><code>DEMO_APP_WEBHOOK_BASE_URL=http://subscription-demo-app:8080</code></pre>
+
+            <p>
+                Ambos servicios deben compartir la red:
+            </p>
+
+            <pre><code>payment-demo-network</code></pre>
+
+            <h2 id="produccion">Qué cambiar en producción</h2>
+
+            <p>
+                La arquitectura de StreamBox sirve como mapa, pero una aplicación real necesita reforzar varias partes.
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>En StreamBox Demo</th>
+                    <th>En producción</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>UI estática educativa</td>
+                    <td>Frontend real con autenticación, permisos y validaciones.</td>
+                </tr>
+                <tr>
+                    <td>DemoStore</td>
+                    <td>Base de datos con repositorios y transacciones.</td>
+                </tr>
+                <tr>
+                    <td>Planes hardcodeados</td>
+                    <td>Planes administrables o persistidos.</td>
+                </tr>
+                <tr>
+                    <td>MockPaymentClient</td>
+                    <td>Cliente real del proveedor o SDK oficial encapsulado.</td>
+                </tr>
+                <tr>
+                    <td>WebhookSignatureVerifier del mock</td>
+                    <td>Verificación oficial de la pasarela real.</td>
+                </tr>
+                <tr>
+                    <td>Eventos educativos</td>
+                    <td>Auditoría real, logs estructurados y monitoreo.</td>
+                </tr>
+                <tr>
+                    <td>Idempotencia básica</td>
+                    <td>Constraints únicos, transacciones y control de duplicados.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h3>Estructura posible en un proyecto real</h3>
+
+            <pre><code>billing/
+  controller/
+    BillingController.java
+    PaymentWebhookController.java
+
+  service/
+    BillingService.java
+    WebhookProcessingService.java
+
+  provider/
+    PaymentProviderClient.java
+    MercadoPagoClient.java
+
+  model/
+    BusinessSubscription.java
+    BusinessPayment.java
+    PaymentWebhookEvent.java
+
+  repository/
+    BusinessSubscriptionRepository.java
+    BusinessPaymentRepository.java
+    PaymentWebhookEventRepository.java
+
+  mapper/
+    PaymentStatusMapper.java
+    SubscriptionStatusMapper.java</code></pre>
+
+            <h2 id="resumen">Resumen</h2>
+
+            <p>
+                StreamBox Demo está organizado para mostrar el flujo completo de una aplicación que cobra suscripciones.
+            </p>
+
+            <pre><code>UI
+  ↓
+Controllers
+  ↓
+SubscriptionService
+  ↓
+MockPaymentClient
+  ↓
+Mock Payment Service
+
+Webhook
+  ↓
+Webhook controller
+  ↓
+Signature verifier
+  ↓
+SubscriptionService
+  ↓
+Store interno</code></pre>
+
+            <div class="docs-callout">
+                Lo más valioso de esta arquitectura es la separación de responsabilidades:
+                la UI muestra, el controller recibe, el servicio orquesta, el cliente habla con el proveedor,
+                el verifier valida firmas y el store conserva el estado interno.
+            </div>
+        </main>
+    </div>
+</div>
+</body>
+</html>

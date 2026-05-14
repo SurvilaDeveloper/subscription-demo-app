@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Escenarios de prueba · StreamBox Demo</title>
+    <link rel="stylesheet" href="./docs.css" />
+</head>
+<body>
+<div class="docs-shell">
+    <header class="docs-header">
+        <div class="docs-brand">
+            <h1>Escenarios de prueba</h1>
+        </div>
+
+        <nav class="docs-actions" aria-label="Acciones">
+            <a class="docs-button" href="./index.html">Docs</a>
+            <a class="docs-button" href="../index.html">StreamBox</a>
+        </nav>
+    </header>
+
+    <div class="docs-layout">
+        <aside class="docs-toc">
+            <strong>Contenido</strong>
+            <a href="#objetivo">Objetivo</a>
+            <a href="#preparacion">Preparación</a>
+            <a href="#aprobado">Pago aprobado</a>
+            <a href="#rechazado">Pago rechazado</a>
+            <a href="#pendiente">Pago pendiente</a>
+            <a href="#recurrente-aprobado">Cobro recurrente aprobado</a>
+            <a href="#recurrente-fallido">Cobro recurrente fallido</a>
+            <a href="#cambio-plan">Cambio de plan</a>
+            <a href="#cancelacion">Cancelación</a>
+            <a href="#webhooks">Webhooks</a>
+            <a href="#resets">Resets</a>
+            <a href="#checklist">Checklist</a>
+        </aside>
+
+        <main class="docs-content">
+            <h1 id="objetivo">Escenarios de prueba de StreamBox Demo</h1>
+
+            <p>
+                Esta guía enumera escenarios prácticos para probar StreamBox Demo como aplicación principal
+                integrada con Mock Payment Service.
+            </p>
+
+            <p>
+                La diferencia con probar solo Mock Payment Service es que acá se revisa qué pasa dentro
+                de StreamBox: suscripciones internas, pagos internos, webhooks recibidos y eventos internos.
+            </p>
+
+            <div class="docs-callout">
+                Antes de probar escenarios importantes, conviene resetear StreamBox y Mock Payment Service
+                para empezar desde un estado limpio.
+            </div>
+
+            <h2 id="preparacion">Preparación</h2>
+
+            <h3>1. Levantar Mock Payment Service</h3>
+
+            <p>
+                Desde la carpeta de Mock Payment Service:
+            </p>
+
+            <pre><code>docker compose up --build</code></pre>
+
+            <p>
+                Abrir:
+            </p>
+
+            <pre><code>http://localhost:9090/studio/</code></pre>
+
+            <h3>2. Levantar StreamBox Demo</h3>
+
+            <p>
+                Desde la carpeta de StreamBox Demo:
+            </p>
+
+            <pre><code>docker compose up --build</code></pre>
+
+            <p>
+                Abrir:
+            </p>
+
+            <pre><code>http://localhost:8080/</code></pre>
+
+            <h3>3. Revisar configuración</h3>
+
+            <p>
+                En StreamBox, revisar la sección:
+            </p>
+
+            <pre><code>Configuración de integración</code></pre>
+
+            <p>
+                Valores esperados si ambos servicios corren en Docker:
+            </p>
+
+            <pre><code>MOCK_PAYMENT_BASE_URL=http://mock-payment-service:9090
+DEMO_APP_WEBHOOK_BASE_URL=http://subscription-demo-app:8080
+MOCK_PAYMENT_WEBHOOK_SECRET=dev-secret</code></pre>
+
+            <h3>4. Resetear estados</h3>
+
+            <p>
+                En StreamBox:
+            </p>
+
+            <pre><code>Resetear demo</code></pre>
+
+            <p>
+                En Mock Payment Studio:
+            </p>
+
+            <pre><code>Resetear estado</code></pre>
+
+            <h2 id="aprobado">Escenario 1: pago aprobado</h2>
+
+            <p>
+                Este es el escenario base. Sirve para comprobar que la integración completa funciona:
+                StreamBox crea la suscripción, Mock Payment Service aprueba el pago, se envía webhook
+                y StreamBox actualiza su estado interno.
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Campo</th>
+                    <th>Valor</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>Tarjeta</td>
+                    <td><code>4111111111111111</code></td>
+                </tr>
+                <tr>
+                    <td>Pago esperado en Mock</td>
+                    <td><code>approved</code></td>
+                </tr>
+                <tr>
+                    <td>Pago interno esperado</td>
+                    <td><code>APPROVED</code></td>
+                </tr>
+                <tr>
+                    <td>Suscripción interna esperada</td>
+                    <td><code>ACTIVE</code></td>
+                </tr>
+                <tr>
+                    <td>Webhook esperado</td>
+                    <td><code>payment.created</code></td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h3>Pasos</h3>
+
+            <ol>
+                <li>En StreamBox, ir a <strong>Suscribirse a StreamBox</strong>.</li>
+                <li>Elegir cualquier plan.</li>
+                <li>Dejar el email de prueba o ingresar otro email.</li>
+                <li>Elegir la tarjeta <code>4111111111111111</code>.</li>
+                <li>Presionar <strong>Suscribirme y pagar</strong>.</li>
+            </ol>
+
+            <h3>Qué revisar en StreamBox</h3>
+
+            <ul>
+                <li>En <strong>Suscripciones internas</strong>, la suscripción debería quedar activa.</li>
+                <li>En <strong>Pagos internos</strong>, debería aparecer un pago aprobado.</li>
+                <li>En <strong>Webhooks recibidos por StreamBox</strong>, debería aparecer un webhook con firma válida.</li>
+                <li>En <strong>Eventos internos</strong>, debería verse el flujo completo.</li>
+            </ul>
+
+            <h3>Qué revisar en Mock Payment Studio</h3>
+
+            <ul>
+                <li>En <strong>Preapprovals</strong>, debería existir la suscripción externa.</li>
+                <li>En <strong>Payments</strong>, debería existir el pago aprobado.</li>
+                <li>En <strong>Webhooks salientes</strong>, debería aparecer <code>delivered=true</code>.</li>
+            </ul>
+
+            <div class="docs-callout">
+                Si Mock Payment Studio muestra <code>delivered=true</code> y StreamBox muestra el webhook recibido,
+                el flujo de integración está funcionando correctamente.
+            </div>
+
+            <h2 id="rechazado">Escenario 2: pago rechazado</h2>
+
+            <p>
+                Este escenario sirve para comprobar que StreamBox registra un pago fallido y no activa
+                la suscripción como si el pago hubiera sido exitoso.
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Tarjeta</th>
+                    <th>Resultado</th>
+                    <th>Pago interno esperado</th>
+                    <th>Suscripción esperada</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>4000000000000002</code></td>
+                    <td>Sin fondos</td>
+                    <td><code>REJECTED</code></td>
+                    <td><code>PAYMENT_FAILED</code></td>
+                </tr>
+                <tr>
+                    <td><code>4000000000009995</code></td>
+                    <td>Número inválido</td>
+                    <td><code>REJECTED</code></td>
+                    <td><code>PAYMENT_FAILED</code></td>
+                </tr>
+                <tr>
+                    <td><code>4000000000000069</code></td>
+                    <td>Tarjeta vencida</td>
+                    <td><code>REJECTED</code></td>
+                    <td><code>PAYMENT_FAILED</code></td>
+                </tr>
+                <tr>
+                    <td><code>4000000000000259</code></td>
+                    <td>Error genérico</td>
+                    <td><code>REJECTED</code></td>
+                    <td><code>PAYMENT_FAILED</code></td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h3>Pasos</h3>
+
+            <ol>
+                <li>Resetear StreamBox y Mock Payment Service.</li>
+                <li>Crear una suscripción desde StreamBox.</li>
+                <li>Elegir una tarjeta de rechazo, por ejemplo <code>4000000000000002</code>.</li>
+                <li>Presionar <strong>Suscribirme y pagar</strong>.</li>
+            </ol>
+
+            <h3>Qué revisar</h3>
+
+            <ul>
+                <li>La suscripción interna no debería quedar <code>ACTIVE</code>.</li>
+                <li>El pago interno debería quedar <code>REJECTED</code>.</li>
+                <li>El webhook debería ser recibido y procesado.</li>
+                <li>Los eventos internos deberían explicar el resultado.</li>
+            </ul>
+
+            <h2 id="pendiente">Escenario 3: pago pendiente</h2>
+
+            <p>
+                Este escenario sirve para probar pagos que no se aprueban ni se rechazan inmediatamente.
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Tarjeta</th>
+                    <th>Pago en Mock</th>
+                    <th>Pago interno</th>
+                    <th>Suscripción interna</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>4000000000000341</code></td>
+                    <td><code>in_process</code></td>
+                    <td><code>IN_PROCESS</code></td>
+                    <td><code>PENDING</code></td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h3>Pasos</h3>
+
+            <ol>
+                <li>Resetear estados.</li>
+                <li>Crear una suscripción desde StreamBox.</li>
+                <li>Elegir la tarjeta <code>4000000000000341</code>.</li>
+                <li>Presionar <strong>Suscribirme y pagar</strong>.</li>
+            </ol>
+
+            <h3>Qué revisar</h3>
+
+            <ul>
+                <li>El pago interno debería quedar en proceso.</li>
+                <li>La suscripción no debería habilitar acceso completo como si estuviera activa.</li>
+                <li>El webhook debería quedar registrado.</li>
+            </ul>
+
+            <h2 id="recurrente-aprobado">Escenario 4: cobro recurrente aprobado</h2>
+
+            <p>
+                Este escenario sirve para probar renovaciones o cobros posteriores sobre una suscripción existente.
+            </p>
+
+            <h3>Preparación</h3>
+
+            <ol>
+                <li>Crear una suscripción con tarjeta aprobada.</li>
+                <li>Verificar que la suscripción quede activa.</li>
+            </ol>
+
+            <h3>Pasos</h3>
+
+            <ol>
+                <li>Ir a <strong>Acciones sobre una suscripción</strong>.</li>
+                <li>En <strong>Simular cobro recurrente</strong>, elegir la suscripción.</li>
+                <li>Elegir la tarjeta <code>4111111111111111</code>.</li>
+                <li>Presionar <strong>Simular cobro</strong>.</li>
+            </ol>
+
+            <h3>Resultado esperado</h3>
+
+            <ul>
+                <li>Se crea un nuevo pago interno.</li>
+                <li>El nuevo pago queda <code>APPROVED</code>.</li>
+                <li>La suscripción se mantiene activa.</li>
+                <li>Se recibe y procesa un nuevo webhook.</li>
+            </ul>
+
+            <h2 id="recurrente-fallido">Escenario 5: cobro recurrente fallido</h2>
+
+            <p>
+                Este escenario sirve para probar una renovación fallida.
+            </p>
+
+            <h3>Preparación</h3>
+
+            <ol>
+                <li>Crear una suscripción con pago aprobado.</li>
+                <li>Verificar que la suscripción esté activa.</li>
+            </ol>
+
+            <h3>Pasos</h3>
+
+            <ol>
+                <li>Ir a <strong>Acciones sobre una suscripción</strong>.</li>
+                <li>En <strong>Simular cobro recurrente</strong>, elegir la suscripción.</li>
+                <li>Elegir <code>4000000000000002</code>.</li>
+                <li>Presionar <strong>Simular cobro</strong>.</li>
+            </ol>
+
+            <h3>Resultado esperado</h3>
+
+            <ul>
+                <li>Se crea un pago interno rechazado.</li>
+                <li>La suscripción puede pasar a <code>PAYMENT_FAILED</code>.</li>
+                <li>StreamBox registra el webhook recibido.</li>
+                <li>Los eventos internos muestran el cambio.</li>
+            </ul>
+
+            <div class="docs-callout">
+                En una aplicación real, este escenario suele disparar avisos al usuario, reintentos,
+                suspensión del servicio o reglas de gracia según el negocio.
+            </div>
+
+            <h2 id="cambio-plan">Escenario 6: cambio de plan</h2>
+
+            <p>
+                Este escenario prueba que StreamBox pueda cambiar el plan interno y sincronizar ese cambio
+                con Mock Payment Service.
+            </p>
+
+            <h3>Preparación</h3>
+
+            <ol>
+                <li>Crear una suscripción activa.</li>
+                <li>Verificar el plan actual en <strong>Suscripciones internas</strong>.</li>
+            </ol>
+
+            <h3>Pasos</h3>
+
+            <ol>
+                <li>Ir a <strong>Acciones sobre una suscripción</strong>.</li>
+                <li>En <strong>Cambiar plan</strong>, elegir la suscripción.</li>
+                <li>Elegir un nuevo plan.</li>
+                <li>Presionar <strong>Cambiar plan</strong>.</li>
+            </ol>
+
+            <h3>Resultado esperado</h3>
+
+            <ul>
+                <li>La suscripción conserva el mismo ID interno.</li>
+                <li>Cambia el plan interno.</li>
+                <li>Cambia el monto interno.</li>
+                <li>Se consulta el estado actualizado al proveedor.</li>
+                <li>Se registra un evento interno de cambio de plan.</li>
+            </ul>
+
+            <h2 id="cancelacion">Escenario 7: cancelación de suscripción</h2>
+
+            <p>
+                Este escenario prueba la cancelación desde la aplicación principal.
+            </p>
+
+            <h3>Preparación</h3>
+
+            <ol>
+                <li>Crear una suscripción.</li>
+                <li>Preferentemente usar una suscripción activa.</li>
+            </ol>
+
+            <h3>Pasos</h3>
+
+            <ol>
+                <li>Ir a <strong>Acciones sobre una suscripción</strong>.</li>
+                <li>En <strong>Cancelar suscripción</strong>, elegir la suscripción.</li>
+                <li>Presionar <strong>Cancelar suscripción</strong>.</li>
+            </ol>
+
+            <h3>Resultado esperado</h3>
+
+            <ul>
+                <li>StreamBox llama al proveedor simulado para cancelar.</li>
+                <li>StreamBox consulta la preapproval actualizada.</li>
+                <li>La suscripción interna queda <code>CANCELLED</code>.</li>
+                <li>Se registra un evento interno de cancelación.</li>
+                <li>Mock Payment Service puede generar un webhook de cancelación.</li>
+            </ul>
+
+            <h2 id="webhooks">Escenario 8: revisar webhooks cruzados</h2>
+
+            <p>
+                Este escenario sirve para entender qué se ve en cada aplicación.
+            </p>
+
+            <h3>En Mock Payment Studio</h3>
+
+            <p>
+                Revisar:
+            </p>
+
+            <pre><code>Webhooks salientes</code></pre>
+
+            <p>
+                Cuando el destino es StreamBox, puede verse:
+            </p>
+
+            <pre><code>delivered=true
+received internally=false</code></pre>
+
+            <p>
+                Eso es correcto. Significa que el webhook fue entregado a StreamBox, no al receptor interno
+                de Mock Payment Service.
+            </p>
+
+            <h3>En StreamBox Demo</h3>
+
+            <p>
+                Revisar:
+            </p>
+
+            <pre><code>Webhooks recibidos por StreamBox</code></pre>
+
+            <p>
+                Ahí debería aparecer:
+            </p>
+
+            <ul>
+                <li>Request ID.</li>
+                <li>Evento.</li>
+                <li>Data ID.</li>
+                <li>Firma válida.</li>
+                <li>Procesado.</li>
+                <li>Error si ocurrió.</li>
+            </ul>
+
+            <h2 id="resets">Escenario 9: resetear estados</h2>
+
+            <p>
+                StreamBox y Mock Payment Service guardan estados separados.
+            </p>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Reset</th>
+                    <th>Qué borra</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>Resetear demo</code> en StreamBox</td>
+                    <td>Suscripciones internas, pagos internos, webhooks recibidos y eventos internos de StreamBox.</td>
+                </tr>
+                <tr>
+                    <td><code>Resetear estado</code> en Mock Payment Studio</td>
+                    <td>Preapprovals, payments, webhooks salientes y estado interno del mock.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h3>Prueba recomendada</h3>
+
+            <ol>
+                <li>Crear una suscripción y pagarla.</li>
+                <li>Ver datos en StreamBox y en Mock Payment Studio.</li>
+                <li>Resetear solo StreamBox.</li>
+                <li>Ver que Mock Payment Service conserva su estado.</li>
+                <li>Resetear solo Mock Payment Service.</li>
+                <li>Ver que StreamBox conserva su estado hasta que también sea reseteado.</li>
+            </ol>
+
+            <div class="docs-callout">
+                Esta separación es intencional. StreamBox representa la aplicación principal y Mock Payment Service
+                representa el proveedor. En una integración real, cada sistema conserva su propio estado.
+            </div>
+
+            <h2 id="checklist">Checklist antes de considerar la integración correcta</h2>
+
+            <ol>
+                <li>Se puede abrir StreamBox desde el navegador.</li>
+                <li>Se puede abrir Mock Payment Studio desde el navegador.</li>
+                <li>StreamBox muestra configuración correcta de integración.</li>
+                <li>Se puede crear una suscripción con pago aprobado.</li>
+                <li>La suscripción interna queda activa.</li>
+                <li>El pago interno queda aprobado.</li>
+                <li>Mock Payment Studio muestra webhook entregado.</li>
+                <li>StreamBox muestra webhook recibido.</li>
+                <li>La firma del webhook aparece válida.</li>
+                <li>El webhook aparece procesado.</li>
+                <li>Se puede probar pago rechazado.</li>
+                <li>Se puede probar pago pendiente.</li>
+                <li>Se puede probar cobro recurrente.</li>
+                <li>Se puede cambiar de plan.</li>
+                <li>Se puede cancelar una suscripción.</li>
+                <li>Los eventos internos ayudan a entender qué ocurrió.</li>
+            </ol>
+
+            <div class="docs-callout">
+                Una integración de pagos no está bien probada solo porque el pago aprobado funciona.
+                También conviene probar rechazos, pendientes, renovaciones, cancelaciones, webhooks y resets.
+            </div>
+        </main>
+    </div>
+</div>
+</body>
+</html>

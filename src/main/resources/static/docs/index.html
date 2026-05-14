@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Docs · StreamBox Demo</title>
+    <link rel="stylesheet" href="./docs.css" />
+</head>
+<body>
+<div class="docs-shell">
+    <header class="docs-header">
+        <div class="docs-brand">
+            <h1>Docs · StreamBox Demo</h1>
+        </div>
+
+        <nav class="docs-actions" aria-label="Acciones">
+            <a class="docs-button" href="../index.html">Volver a StreamBox</a>
+        </nav>
+    </header>
+
+    <main class="docs-content">
+        <h1>Documentación de StreamBox Demo</h1>
+
+        <p>
+            Esta sección reúne documentación larga para entender cómo StreamBox Demo funciona como
+            aplicación principal integrada con Mock Payment Service.
+        </p>
+
+        <div class="docs-grid">
+            <article class="docs-card">
+                <h2>Guía rápida de uso</h2>
+                <p>
+                    Recorrido inicial para levantar Mock Payment Service, abrir StreamBox,
+                    crear una suscripción, pagar con tarjeta ficticia y revisar webhooks.
+                </p>
+                <a class="docs-button" href="./quick-start.html">
+                    Abrir guía
+                </a>
+            </article>
+
+            <article class="docs-card">
+                <h2>Docker y configuración</h2>
+                <p>
+                    Guía para entender puertos, variables de entorno, URLs internas,
+                    comunicación con Mock Payment Service y red Docker compartida.
+                </p>
+                <a class="docs-button" href="./docker-configuration.html">
+                    Abrir guía
+                </a>
+            </article>
+
+            <article class="docs-card">
+                <h2>Webhooks y estado interno</h2>
+                <p>
+                    Guía para entender cómo StreamBox recibe webhooks, valida firmas,
+                    consulta al proveedor y actualiza suscripciones, pagos y eventos internos.
+                </p>
+                <a class="docs-button" href="./webhooks-and-internal-state.html">
+                    Abrir guía
+                </a>
+            </article>
+
+            <article class="docs-card">
+                <h2>Troubleshooting</h2>
+                <p>
+                    Guía para diagnosticar problemas comunes con Docker, puertos, red compartida,
+                    conexión con Mock Payment Service, webhooks, firmas y estado persistido.
+                </p>
+                <a class="docs-button" href="./troubleshooting.html">
+                    Abrir guía
+                </a>
+            </article>
+
+            <article class="docs-card">
+                <h2>Escenarios de prueba</h2>
+                <p>
+                    Guía práctica para probar pagos aprobados, rechazados, pendientes,
+                    cobros recurrentes, cambios de plan, cancelaciones, webhooks y resets.
+                </p>
+                <a class="docs-button" href="./testing-scenarios.html">
+                    Abrir guía
+                </a>
+            </article>
+
+            <article class="docs-card">
+                <h2>Seguridad y límites</h2>
+                <p>
+                    Guía para entender qué partes de StreamBox son solo demo,
+                    qué no debe copiarse a producción y qué cuidados aparecen al integrar pagos reales.
+                </p>
+                <a class="docs-button" href="./security-and-limitations.html">
+                    Abrir guía
+                </a>
+            </article>
+
+            <article class="docs-card">
+                <h2>Arquitectura interna</h2>
+                <p>
+                    Guía para entender cómo se organiza StreamBox por dentro:
+                    UI, API, servicios, cliente HTTP, modelos, store, webhooks y persistencia.
+                </p>
+                <a class="docs-button" href="./internal-architecture.html">
+                    Abrir guía
+                </a>
+            </article>
+
+            <article class="docs-card">
+                <h2>Migrar a pasarela real</h2>
+                <p>
+                    Guía para adaptar el patrón de StreamBox Demo a una pasarela real:
+                    cliente propio, SDK, DTOs, webhooks, estados, base de datos e idempotencia.
+                </p>
+                <a class="docs-button" href="./migrate-to-real-payment-provider.html">
+                    Abrir guía
+                </a>
+            </article>
+
+            <article class="docs-card">
+                <h2>Referencia de endpoints</h2>
+                <p>
+                    Resumen práctico de endpoints HTTP de StreamBox Demo para estado,
+                    configuración, planes, suscripciones, pagos, webhooks y eventos internos.
+                </p>
+                <a class="docs-button" href="./api-reference.html">
+                    Abrir guía
+                </a>
+            </article>
+
+            <article class="docs-card">
+                <h2>Responsabilidades legales</h2>
+                <p>
+                    Guía orientativa para desarrolladores sobre privacidad, consentimiento,
+                    evidencia, reclamos, fraude, facturación, webhooks y pedidos de autoridad.
+                </p>
+                <a class="docs-button" href="./legal-responsibilities.html">
+                    Abrir guía
+                </a>
+            </article>
+
+            <article class="docs-card">
+                <h2>Recorrido del código de pagos</h2>
+                <p>
+                    Guía comentada del código Java usado para crear suscripciones, llamar al mock,
+                    registrar pagos, recibir webhooks, validar firmas y actualizar estado interno.
+                </p>
+                <a class="docs-button" href="./payment-code-walkthrough.html">
+                    Abrir guía
+                </a>
+            </article>
+
+            <article class="docs-card">
+                <h2>Código para emular</h2>
+                <p>
+                    Guía para identificar qué partes de StreamBox Demo sirven como referencia para un
+                    proyecto real y qué partes son solamente código educativo de demostración.
+                </p>
+                <a class="docs-button" href="./code-to-emulate-in-real-project.html">
+                    Abrir guía
+                </a>
+            </article>
+        </div>
+
+        <div class="docs-callout">
+            La ayuda integrada queda para explicaciones cortas dentro de la UI. Esta sección queda para
+            documentación larga, guías completas y material de consulta.
+        </div>
+    </main>
+</div>
+</body>
+</html>
