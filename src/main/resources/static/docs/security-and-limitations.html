@@ -63,8 +63,10 @@
 
             <ul>
                 <li>Cómo crear una suscripción interna.</li>
-                <li>Cómo llamar a un proveedor de pagos simulado.</li>
+                <li>Cómo crear una preapproval en un proveedor de pagos simulado.</li>
                 <li>Cómo guardar IDs externos del proveedor.</li>
+                <li>Cómo separar la acción de suscribirse de la acción de pagar.</li>
+                <li>Cómo pagar una suscripción existente con tarjetas ficticias.</li>
                 <li>Cómo simular pagos aprobados, rechazados y pendientes.</li>
                 <li>Cómo recibir webhooks.</li>
                 <li>Cómo validar firmas de webhooks.</li>
@@ -151,7 +153,8 @@
 
             <p>
                 Las tarjetas que aparecen en StreamBox son tarjetas ficticias para probar escenarios
-                contra Mock Payment Service.
+                contra Mock Payment Service. En el flujo actual, se eligen en la acción <strong>Pagar</strong>,
+                después de haber creado una suscripción con <strong>Suscribirme</strong>.
             </p>
 
             <pre><code>4111111111111111
@@ -414,7 +417,7 @@ DEMO_APP_STORAGE_FILE_PATH=/app/data/subscription-demo-state.bin</code></pre>
                     <td>Verificación de firma oficial del proveedor.</td>
                 </tr>
                 <tr>
-                    <td>Tarjetas ficticias</td>
+                    <td>Tarjetas ficticias en la acción <strong>Pagar</strong></td>
                     <td>Checkout, tokenización o SDK seguro.</td>
                 </tr>
                 <tr>

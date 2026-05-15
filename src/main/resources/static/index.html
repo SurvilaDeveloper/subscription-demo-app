@@ -82,13 +82,21 @@
         <section class="card card-full">
             <div class="card-header">
                 <div>
-                    <h2>Suscribirse a StreamBox</h2>
-                    <p>Elegí un plan, ingresá una tarjeta ficticia y simulá el pago contra Mock Payment Service.</p>
+                    <h2>Suscripción y pago</h2>
+                    <p>
+                        Primero creá la suscripción interna y la preapproval en Mock Payment Service.
+                        Después pagá una suscripción existente con una tarjeta ficticia.
+                    </p>
                 </div>
             </div>
 
-            <form id="subscriptionForm" class="subscription-form">
-                <div class="form-grid">
+            <div class="actions-grid">
+                <form id="subscriptionForm" class="action-card">
+                    <h3>Suscribirme</h3>
+                    <p>
+                        Crea una suscripción interna en estado pendiente y la registra en Mock Payment Service.
+                    </p>
+
                     <label class="field">
                         <span>Plan</span>
                         <select id="planSelect" required>
@@ -101,9 +109,27 @@
                         <input id="payerEmailInput" type="email" value="cliente@test.com" required />
                     </label>
 
+                    <button class="button button-primary" type="submit">
+                        Suscribirme
+                    </button>
+                </form>
+
+                <form id="paymentForm" class="action-card">
+                    <h3>Pagar</h3>
+                    <p>
+                        Genera el pago inicial de una suscripción existente usando una tarjeta ficticia.
+                    </p>
+
+                    <label class="field">
+                        <span>Suscripción</span>
+                        <select id="paymentSubscriptionSelect" required>
+                            <option value="">Sin suscripciones</option>
+                        </select>
+                    </label>
+
                     <label class="field">
                         <span>Tarjeta ficticia</span>
-                        <select id="cardNumberInput" required>
+                        <select id="paymentCardNumberInput" required>
                             <option value="4111111111111111">4111111111111111 · Pago aprobado</option>
                             <option value="4000000000000002">4000000000000002 · Sin fondos</option>
                             <option value="4000000000009995">4000000000009995 · Número inválido</option>
@@ -112,12 +138,12 @@
                             <option value="4000000000000259">4000000000000259 · Error genérico</option>
                         </select>
                     </label>
-                </div>
 
-                <button class="button button-primary" type="submit">
-                    Suscribirme y pagar
-                </button>
-            </form>
+                    <button class="button button-primary" type="submit">
+                        Pagar
+                    </button>
+                </form>
+            </div>
         </section>
 
         <section class="card card-full">

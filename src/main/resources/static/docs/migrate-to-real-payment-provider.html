@@ -235,6 +235,9 @@ Implementación concreta</code></pre>
             </p>
 
             <pre><code>dto/
+  CreateSubscriptionRequest.java
+  CreateSubscriptionResponse.java
+  PaySubscriptionRequest.java
   StartSubscriptionRequest.java
   StartSubscriptionResponse.java
 
@@ -250,6 +253,13 @@ dto/mercadopago/
 dto/stripe/
   StripeCheckoutSessionResponse.java
   StripeSubscriptionResponse.java</code></pre>
+
+            <p>
+                En el flujo actual de StreamBox, <code>CreateSubscriptionRequest</code> representa el paso
+                de suscribirse y <code>PaySubscriptionRequest</code> representa el paso de pagar una
+                suscripción existente. <code>StartSubscriptionRequest</code> puede quedar como ejemplo
+                de flujo combinado o compatibilidad legacy.
+            </p>
 
             <h3>Qué evitar</h3>
 
@@ -268,7 +278,7 @@ Provider raw payload se guarda aparte si hace falta auditoría.</code></pre>
 
             <p>
                 En StreamBox Demo, <code>SubscriptionService</code> crea la suscripción interna, llama al mock,
-                guarda el ID externo, procesa pagos y webhooks.
+                guarda el ID externo, paga suscripciones existentes, procesa pagos y webhooks.
             </p>
 
             <p>
@@ -288,8 +298,9 @@ PaymentWebhookProcessingService</code></pre>
 4. Crear recurso en el proveedor real.
 5. Guardar providerSubscriptionId o providerCheckoutSessionId.
 6. Devolver URL de checkout, client secret o estado inicial.
-7. Esperar confirmación por webhook.
-8. Activar internamente solo cuando el proveedor confirme pago válido.</code></pre>
+7. Ejecutar el pago como paso separado o redirigir al checkout.
+8. Esperar confirmación por webhook.
+9. Activar internamente solo cuando el proveedor confirme pago válido.</code></pre>
 
             <h3>Importante</h3>
 
@@ -304,6 +315,7 @@ createSubscription() = usuario activo inmediatamente
 
 Mejor:
 createSubscription() = estado interno PENDING
+paySubscription() o checkout = intento de pago
 webhook confirmado = estado interno ACTIVE</code></pre>
 
             <h2 id="webhooks">Adaptar webhooks reales</h2>

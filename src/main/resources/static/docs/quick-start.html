@@ -29,7 +29,8 @@
             <a href="#streambox">Levantar StreamBox Demo</a>
             <a href="#abrir">Abrir la UI</a>
             <a href="#configuracion">Revisar configuración</a>
-            <a href="#suscribirse">Suscribirse y pagar</a>
+            <a href="#suscribirse">Suscribirse</a>
+            <a href="#pagar">Pagar</a>
             <a href="#verificar">Verificar resultado</a>
             <a href="#webhooks">Revisar webhooks</a>
             <a href="#acciones">Probar acciones posteriores</a>
@@ -232,7 +233,7 @@ http://subscription-demo-app:8080/api/webhooks/mock-payment</code></pre>
             <ul>
                 <li>Estado de la aplicación principal.</li>
                 <li>Configuración de integración.</li>
-                <li>Formulario para suscribirse.</li>
+                <li>Sección de suscripción y pago.</li>
                 <li>Acciones sobre una suscripción.</li>
                 <li>Planes disponibles.</li>
                 <li>Suscripciones internas.</li>
@@ -244,7 +245,7 @@ http://subscription-demo-app:8080/api/webhooks/mock-payment</code></pre>
             <h2 id="configuracion">5. Revisar configuración de integración</h2>
 
             <p>
-                Antes de probar un pago, revisar la sección:
+                Antes de probar una suscripción o un pago, revisar la sección:
             </p>
 
             <pre><code>Configuración de integración</code></pre>
@@ -276,27 +277,24 @@ http://subscription-demo-app:8080/api/webhooks/mock-payment</code></pre>
                 </tbody>
             </table>
 
-            <h2 id="suscribirse">6. Suscribirse y pagar</h2>
+            <h2 id="suscribirse">6. Suscribirse</h2>
 
             <p>
                 En la sección:
             </p>
 
-            <pre><code>Suscribirse a StreamBox</code></pre>
+            <pre><code>Suscripción y pago → Suscribirme</code></pre>
 
             <p>
-                Elegir un plan, dejar el email de prueba o ingresar otro, y seleccionar una tarjeta ficticia.
+                Elegir un plan, dejar el email de prueba o ingresar otro, y presionar:
             </p>
 
-            <h3>Pago aprobado</h3>
-
-            <pre><code>4111111111111111</code></pre>
+            <pre><code>Suscribirme</code></pre>
 
             <p>
-                Luego presionar:
+                En este paso todavía no se genera el pago. StreamBox crea una suscripción interna
+                y registra una preapproval en Mock Payment Service.
             </p>
-
-            <pre><code>Suscribirme y pagar</code></pre>
 
             <p>
                 Flujo esperado:
@@ -310,6 +308,66 @@ Mock crea preapproval
   ↓
 StreamBox guarda providerSubscriptionId
   ↓
+La suscripción queda lista para pagar</code></pre>
+
+            <h3>Qué revisar después de suscribirse</h3>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Sección</th>
+                    <th>Resultado esperado</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>Suscripciones internas</td>
+                    <td>Debe aparecer una nueva suscripción interna.</td>
+                </tr>
+                <tr>
+                    <td>Provider subscription ID</td>
+                    <td>Debe tener el ID externo generado por Mock Payment Service.</td>
+                </tr>
+                <tr>
+                    <td>Estado</td>
+                    <td>Normalmente queda <code>PENDING</code> hasta que se pague.</td>
+                </tr>
+                <tr>
+                    <td>Pagos internos</td>
+                    <td>Todavía no debería aparecer un pago por esta suscripción.</td>
+                </tr>
+                </tbody>
+            </table>
+
+            <div class="docs-callout">
+                Separar la suscripción del pago ayuda a entender mejor el flujo real:
+                primero se crea la intención o suscripción, después se intenta cobrar.
+            </div>
+
+            <h2 id="pagar">7. Pagar</h2>
+
+            <p>
+                Después de crear una suscripción, usar:
+            </p>
+
+            <pre><code>Suscripción y pago → Pagar</code></pre>
+
+            <p>
+                Elegir una suscripción existente, seleccionar una tarjeta ficticia y presionar:
+            </p>
+
+            <pre><code>Pagar</code></pre>
+
+            <h3>Pago aprobado</h3>
+
+            <pre><code>4111111111111111</code></pre>
+
+            <p>
+                Flujo esperado:
+            </p>
+
+            <pre><code>StreamBox toma una suscripción existente
+  ↓
 StreamBox simula pago con tarjeta ficticia
   ↓
 Mock crea payment
@@ -320,7 +378,11 @@ StreamBox valida firma
   ↓
 StreamBox consulta GET /payment/{id}
   ↓
-StreamBox actualiza su estado interno</code></pre>
+StreamBox consulta GET /preapproval/{id}
+  ↓
+StreamBox registra pago interno
+  ↓
+StreamBox actualiza estado interno</code></pre>
 
             <h3>Tarjetas útiles</h3>
 
@@ -359,7 +421,7 @@ StreamBox actualiza su estado interno</code></pre>
                 </tbody>
             </table>
 
-            <h2 id="verificar">7. Verificar el resultado en StreamBox</h2>
+            <h2 id="verificar">8. Verificar el resultado en StreamBox</h2>
 
             <p>
                 Después de pagar con tarjeta aprobada, revisar:
@@ -397,7 +459,12 @@ StreamBox actualiza su estado interno</code></pre>
                 en un estado interno acorde.
             </p>
 
-            <h2 id="webhooks">8. Revisar webhooks en Mock Payment Studio</h2>
+            <p>
+                Si el pago quedó pendiente, StreamBox debería registrar un pago en proceso y conservar un estado
+                interno que no habilite la suscripción como si ya estuviera aprobada.
+            </p>
+
+            <h2 id="webhooks">9. Revisar webhooks en Mock Payment Studio</h2>
 
             <p>
                 Abrir Mock Payment Studio:
@@ -433,7 +500,7 @@ StreamBox actualiza su estado interno</code></pre>
                 como entregado en Mock Payment Studio y como recibido en StreamBox Demo.
             </div>
 
-            <h2 id="acciones">9. Probar acciones posteriores</h2>
+            <h2 id="acciones">10. Probar acciones posteriores</h2>
 
             <p>
                 Una vez creada una suscripción, se pueden probar acciones posteriores:
@@ -481,7 +548,7 @@ StreamBox actualiza su estado interno</code></pre>
                 Esto cancela la suscripción y registra el evento correspondiente.
             </p>
 
-            <h2 id="reset">10. Resetear demo</h2>
+            <h2 id="reset">11. Resetear demo</h2>
 
             <p>
                 Para volver a empezar, usar:
@@ -524,16 +591,23 @@ StreamBox actualiza su estado interno</code></pre>
 4. Abrir StreamBox:
    http://localhost:8080/
 
-5. Suscribirse con tarjeta:
-   4111111111111111
+5. Suscribirse:
+   elegir plan
+   ingresar email
+   presionar Suscribirme
 
-6. Verificar en StreamBox:
+6. Pagar:
+   elegir suscripción
+   elegir tarjeta 4111111111111111
+   presionar Pagar
+
+7. Verificar en StreamBox:
    suscripción interna
    pago interno
    webhook recibido
    evento interno
 
-7. Verificar en Mock Payment Studio:
+8. Verificar en Mock Payment Studio:
    webhook saliente delivered=true</code></pre>
 
             <div class="docs-callout">

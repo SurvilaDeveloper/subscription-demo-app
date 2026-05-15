@@ -6,6 +6,9 @@ import com.survila.subscriptiondemo.dto.SimulateRecurringChargeRequest;
 import com.survila.subscriptiondemo.dto.StartSubscriptionRequest;
 import com.survila.subscriptiondemo.dto.StartSubscriptionResponse;
 import com.survila.subscriptiondemo.dto.SubscriptionActionResponse;
+import com.survila.subscriptiondemo.dto.CreateSubscriptionRequest;
+import com.survila.subscriptiondemo.dto.CreateSubscriptionResponse;
+import com.survila.subscriptiondemo.dto.PaySubscriptionRequest;
 import com.survila.subscriptiondemo.dto.mock.MockChangePlanRequest;
 import com.survila.subscriptiondemo.dto.mock.MockCreatePreapprovalRequest;
 import com.survila.subscriptiondemo.dto.mock.MockPayWithCardRequest;
@@ -255,6 +258,102 @@ public class SubscriptionService {
                 null,
                 providerPreapproval.status(),
                 null
+        );
+    }
+
+    public CreateSubscriptionResponse createSubscription(CreateSubscriptionRequest request) {
+        Plan plan = planCatalogService.findById(request.planId())
+                .orElseThrow(() -> new BadRequestException("Plan not found: " + request.planId()));
+
+        Instant now = Instant.now();
+
+        DemoSubscription subscription = new DemoSubscription(
+                store.nextSubscriptionId(),
+                plan.id(),
+                plan.name(),
+                plan.amount(),
+                plan.currency(),
+                request.payerEmail(),
+                null,
+                SubscriptionStatus.PENDING,
+                now,
+                now
+        );
+
+        store.saveSubscription(subscription);
+        store.addEvent(
+                "SUBSCRIPTION_CREATED",
+                "Internal subscription %s was created for plan %s."
+                        .formatted(subscription.getId(), plan.name())
+        );
+
+        MockPreapprovalResponse preapproval = mockPaymentClient.createPreapproval(
+                buildCreatePreapprovalRequest(subscription)
+        );
+
+        subscription.setProviderSubscriptionId(preapproval.id());
+        subscription.setStatus(mapPreapprovalStatus(preapproval.status()));
+        store.saveSubscription(subscription);
+
+        store.addEvent(
+                "PROVIDER_PREAPPROVAL_CREATED",
+                "Provider preapproval %s was created for internal subscription %s."
+                        .formatted(preapproval.id(), subscription.getId())
+        );
+
+        store.addEvent(
+                "SUBSCRIPTION_WAITING_FOR_PAYMENT",
+                "Internal subscription %s is waiting for payment."
+                        .formatted(subscription.getId())
+        );
+
+        return new CreateSubscriptionResponse(
+                subscription,
+                preapproval.id(),
+                preapproval.status()
+        );
+    }
+
+    public SubscriptionActionResponse paySubscription(
+            String subscriptionId,
+            PaySubscriptionRequest request
+    ) {
+        DemoSubscription subscription = getSubscriptionOrThrow(subscriptionId);
+
+        ensureProviderSubscription(subscription);
+
+        MockPayWithCardResponse payResponse = mockPaymentClient.payWithCard(
+                subscription.getProviderSubscriptionId(),
+                buildPayWithCardRequest(request.cardNumber())
+        );
+
+        subscription.setStatus(mapPreapprovalStatus(payResponse.preapprovalStatus()));
+        store.saveSubscription(subscription);
+
+        DemoPayment payment = savePaymentIfMissing(
+                subscription.getId(),
+                payResponse.payment()
+        );
+
+        store.addEvent(
+                "PAYMENT_RESPONSE_RECEIVED",
+                "Direct payment response received from provider. Provider payment %s has status %s."
+                        .formatted(payResponse.payment().id(), payResponse.payment().status())
+        );
+
+        store.addEvent(
+                "SUBSCRIPTION_STATUS_UPDATED",
+                "Internal subscription %s changed to %s from provider status %s."
+                        .formatted(subscription.getId(), subscription.getStatus(), payResponse.preapprovalStatus())
+        );
+
+        return new SubscriptionActionResponse(
+                subscription,
+                payment,
+                subscription.getProviderSubscriptionId(),
+                payResponse.payment().id(),
+                payResponse.preapprovalStatus(),
+                payResponse.payment().status()
         );
     }
 

@@ -10,6 +10,22 @@ This project follows a simple semantic versioning style:
 
 ---
 
+## 1.2.0 - 2026-05-15
+
+### Added
+
+- Added separated subscription creation and payment flow.
+- Added `POST /api/subscriptions` to create an internal subscription and provider preapproval without paying immediately.
+- Added `POST /api/subscriptions/{id}/pay` to pay an existing subscription with a fictitious card.
+
+### Changed
+
+- Updated StreamBox Demo UI to replace the combined `Suscribirme y pagar` action with two actions: `Suscribirme` and `Pagar`.
+- Updated help content and documentation to describe the separated subscription and payment flow.
+- Kept `POST /api/subscriptions/start` as a legacy combined endpoint for compatibility.
+
+---
+
 ## 1.1.0 - 2026-05-14
 
 ### Added
@@ -76,12 +92,12 @@ StreamBox Demo can now be used as a Docker-based educational application while s
 - Docker Compose setup.
 - Configurable Docker host port through `DEMO_APP_HOST_PORT`.
 - Configurable Docker Compose environment variables for:
-    - `MOCK_PAYMENT_BASE_URL`
-    - `MOCK_PAYMENT_WEBHOOK_SECRET`
-    - `DEMO_APP_PUBLIC_BASE_URL`
-    - `DEMO_APP_WEBHOOK_BASE_URL`
-    - `DEMO_APP_STORAGE_TYPE`
-    - `DEMO_APP_STORAGE_FILE_PATH`
+  - `MOCK_PAYMENT_BASE_URL`
+  - `MOCK_PAYMENT_WEBHOOK_SECRET`
+  - `DEMO_APP_PUBLIC_BASE_URL`
+  - `DEMO_APP_WEBHOOK_BASE_URL`
+  - `DEMO_APP_STORAGE_TYPE`
+  - `DEMO_APP_STORAGE_FILE_PATH`
 - Shared Docker network support for running with Mock Payment Service.
 - `.env.example` file.
 - Main project `README.md`.

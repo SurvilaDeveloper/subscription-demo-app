@@ -67,6 +67,8 @@ UI estática de StreamBox
   ↓
 Controllers HTTP
   ↓
+POST /api/subscriptions o POST /api/subscriptions/{id}/pay
+  ↓
 SubscriptionService
   ↓
 MockPaymentClient
@@ -147,7 +149,7 @@ DemoStore</code></pre>
             <ul>
                 <li>Ver el estado general de la aplicación principal.</li>
                 <li>Revisar la configuración de integración.</li>
-                <li>Elegir un plan y pagar con tarjeta ficticia.</li>
+                <li>Crear una suscripción y después pagarla con tarjeta ficticia.</li>
                 <li>Simular cobros recurrentes.</li>
                 <li>Cambiar plan.</li>
                 <li>Cancelar una suscripción.</li>
@@ -167,8 +169,45 @@ DemoStore</code></pre>
 
             <p>
                 Los controllers son la entrada HTTP de la aplicación.
-                En StreamBox hay controllers para operar la demo y un controller dedicado para webhooks.
+                En StreamBox hay controllers para operar la demo y un controller dedicado para recibir webhooks.
             </p>
+
+            <h3>Controller de suscripciones</h3>
+
+            <p>
+                El controller de suscripciones expone las acciones principales que consume la UI.
+                El flujo actual separa la creación de la suscripción y el pago inicial.
+            </p>
+
+            <pre><code>POST /api/subscriptions
+POST /api/subscriptions/{id}/pay
+POST /api/subscriptions/start
+POST /api/subscriptions/{id}/simulate-recurring-charge
+POST /api/subscriptions/{id}/change-plan
+POST /api/subscriptions/{id}/cancel</code></pre>
+
+            <table>
+                <thead>
+                <tr>
+                    <th>Endpoint</th>
+                    <th>Uso</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><code>POST /api/subscriptions</code></td>
+                    <td>Crea la suscripción interna y la preapproval externa.</td>
+                </tr>
+                <tr>
+                    <td><code>POST /api/subscriptions/{id}/pay</code></td>
+                    <td>Paga una suscripción existente con tarjeta ficticia.</td>
+                </tr>
+                <tr>
+                    <td><code>POST /api/subscriptions/start</code></td>
+                    <td>Flujo combinado legacy: crea suscripción y paga en una sola llamada.</td>
+                </tr>
+                </tbody>
+            </table>
 
             <h3>Controller de webhooks</h3>
 
@@ -215,8 +254,8 @@ Responder al proveedor</code></pre>
 
             <p>
                 Este servicio orquesta casi todo el flujo de suscripciones y pagos: crea suscripciones internas,
-                llama al proveedor, guarda IDs externos, simula pagos, procesa webhooks y actualiza estados.
-                :contentReference[oaicite:1]{index=1}
+                llama al proveedor, guarda IDs externos, paga suscripciones existentes, procesa webhooks
+                y actualiza estados.
             </p>
 
             <h3>Responsabilidades principales</h3>
@@ -225,7 +264,7 @@ Responder al proveedor</code></pre>
                 <li>Crear una suscripción interna.</li>
                 <li>Crear una preapproval en Mock Payment Service.</li>
                 <li>Guardar el <code>providerSubscriptionId</code>.</li>
-                <li>Simular pago inicial.</li>
+                <li>Pagar una suscripción existente con tarjeta ficticia.</li>
                 <li>Simular cobros recurrentes.</li>
                 <li>Cambiar plan.</li>
                 <li>Cancelar suscripción.</li>
@@ -243,9 +282,9 @@ Responder al proveedor</code></pre>
 
             <pre><code>Plan interno
   ↓
-Suscripción interna
+Suscripción interna PENDING
   ↓
-Proveedor externo
+Preapproval externa
   ↓
 Pago externo
   ↓
@@ -253,7 +292,7 @@ Pago interno
   ↓
 Webhook
   ↓
-Estado interno</code></pre>
+Estado interno actualizado</code></pre>
 
             <p>
                 Si esa lógica estuviera repartida sin orden entre controllers, UI y cliente HTTP,
@@ -271,7 +310,7 @@ Estado interno</code></pre>
             <p>
                 encapsula las llamadas HTTP hacia Mock Payment Service usando <code>RestClient</code>.
                 Expone métodos como crear preapproval, consultar pago, pagar con tarjeta, simular cobro recurrente,
-                cambiar plan y cancelar preapproval. :contentReference[oaicite:2]{index=2}
+                cambiar plan y cancelar preapproval.
             </p>
 
             <h3>Qué problema resuelve</h3>
@@ -329,7 +368,6 @@ PayPalClient</code></pre>
             <p>
                 Representa una suscripción desde el punto de vista de StreamBox.
                 Guarda datos del plan, email del pagador, estado interno y el ID externo del proveedor.
-                :contentReference[oaicite:3]{index=3}
             </p>
 
             <table>
@@ -374,7 +412,7 @@ PayPalClient</code></pre>
             <p>
                 Representa un pago interno creado a partir de un pago externo del proveedor.
                 Guarda el ID interno, la suscripción asociada, el ID externo del pago, estado, detalle,
-                monto, moneda y fecha. :contentReference[oaicite:4]{index=4}
+                monto, moneda y fecha.
             </p>
 
             <h3>DemoReceivedWebhook</h3>
@@ -384,7 +422,6 @@ PayPalClient</code></pre>
             <p>
                 Representa un webhook recibido por StreamBox. Guarda request ID, firma, tipo de evento,
                 acción, data ID, si la firma fue válida, si fue procesado y el error si falló.
-                :contentReference[oaicite:5]{index=5}
             </p>
 
             <h3>Idea importante</h3>
@@ -405,7 +442,7 @@ PayPalClient</code></pre>
 
             <p>
                 Guarda suscripciones, pagos, eventos y webhooks recibidos. También genera IDs internos
-                y puede persistir el estado en archivo cuando se usa storage tipo <code>file</code>. :contentReference[oaicite:6]{index=6}
+                y puede persistir el estado en archivo cuando se usa storage tipo <code>file</code>.
             </p>
 
             <h3>Qué guarda</h3>
@@ -464,7 +501,7 @@ DemoStore</code></pre>
 
             <p>
                 Esta clase reconstruye el manifest, calcula HMAC SHA-256 con el secret compartido
-                y compara el hash esperado con el recibido. :contentReference[oaicite:7]{index=7}
+                y compara el hash esperado con el recibido.
             </p>
 
             <h3>Procesamiento</h3>

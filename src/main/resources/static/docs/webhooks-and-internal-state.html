@@ -91,22 +91,29 @@ StreamBox Demo
                 Un flujo típico de pago aprobado funciona así:
             </p>
 
-            <pre><code>1. El usuario elige un plan en StreamBox.
+            <pre><code>1. El usuario elige un plan y presiona Suscribirme.
 2. StreamBox crea una suscripción interna PENDING.
 3. StreamBox llama a Mock Payment Service y crea una preapproval.
 4. Mock Payment Service devuelve providerSubscriptionId.
 5. StreamBox guarda providerSubscriptionId.
-6. StreamBox simula el pago con tarjeta ficticia.
-7. Mock Payment Service crea un payment.
-8. Mock Payment Service envía webhook a StreamBox.
-9. StreamBox recibe el webhook.
-10. StreamBox valida x-signature.
-11. StreamBox registra DemoReceivedWebhook.
-12. StreamBox consulta GET /payment/{id}.
-13. StreamBox consulta GET /preapproval/{id}.
-14. StreamBox crea o actualiza DemoPayment.
-15. StreamBox actualiza DemoSubscription.
-16. StreamBox marca el webhook como procesado.</code></pre>
+6. La suscripción queda lista para pagar.
+7. El usuario selecciona la suscripción y presiona Pagar.
+8. StreamBox simula el pago con tarjeta ficticia.
+9. Mock Payment Service crea un payment.
+10. Mock Payment Service envía webhook a StreamBox.
+11. StreamBox recibe el webhook.
+12. StreamBox valida x-signature.
+13. StreamBox registra DemoReceivedWebhook.
+14. StreamBox consulta GET /payment/{id}.
+15. StreamBox consulta GET /preapproval/{id}.
+16. StreamBox crea o actualiza DemoPayment.
+17. StreamBox actualiza DemoSubscription.
+18. StreamBox marca el webhook como procesado.</code></pre>
+
+            <div class="docs-callout">
+                La creación de la suscripción y el pago son acciones separadas en la UI.
+                El webhook aparece normalmente después del paso <strong>Pagar</strong>, porque ahí se genera el payment.
+            </div>
 
             <h2 id="endpoint">Endpoint receptor</h2>
 

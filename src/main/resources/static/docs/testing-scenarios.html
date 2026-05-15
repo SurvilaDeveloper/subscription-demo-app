@@ -118,8 +118,8 @@ MOCK_PAYMENT_WEBHOOK_SECRET=dev-secret</code></pre>
 
             <p>
                 Este es el escenario base. Sirve para comprobar que la integración completa funciona:
-                StreamBox crea la suscripción, Mock Payment Service aprueba el pago, se envía webhook
-                y StreamBox actualiza su estado interno.
+                StreamBox crea la suscripción, después se paga esa suscripción con una tarjeta ficticia,
+                Mock Payment Service aprueba el pago, se envía webhook y StreamBox actualiza su estado interno.
             </p>
 
             <table>
@@ -156,11 +156,15 @@ MOCK_PAYMENT_WEBHOOK_SECRET=dev-secret</code></pre>
             <h3>Pasos</h3>
 
             <ol>
-                <li>En StreamBox, ir a <strong>Suscribirse a StreamBox</strong>.</li>
+                <li>En StreamBox, ir a <strong>Suscripción y pago → Suscribirme</strong>.</li>
                 <li>Elegir cualquier plan.</li>
                 <li>Dejar el email de prueba o ingresar otro email.</li>
+                <li>Presionar <strong>Suscribirme</strong>.</li>
+                <li>Verificar que la suscripción aparezca en <strong>Suscripciones internas</strong>.</li>
+                <li>Ir a <strong>Suscripción y pago → Pagar</strong>.</li>
+                <li>Elegir la suscripción creada.</li>
                 <li>Elegir la tarjeta <code>4111111111111111</code>.</li>
-                <li>Presionar <strong>Suscribirme y pagar</strong>.</li>
+                <li>Presionar <strong>Pagar</strong>.</li>
             </ol>
 
             <h3>Qué revisar en StreamBox</h3>
@@ -233,9 +237,11 @@ MOCK_PAYMENT_WEBHOOK_SECRET=dev-secret</code></pre>
 
             <ol>
                 <li>Resetear StreamBox y Mock Payment Service.</li>
-                <li>Crear una suscripción desde StreamBox.</li>
+                <li>Crear una suscripción desde <strong>Suscripción y pago → Suscribirme</strong>.</li>
+                <li>Ir a <strong>Suscripción y pago → Pagar</strong>.</li>
+                <li>Elegir la suscripción creada.</li>
                 <li>Elegir una tarjeta de rechazo, por ejemplo <code>4000000000000002</code>.</li>
-                <li>Presionar <strong>Suscribirme y pagar</strong>.</li>
+                <li>Presionar <strong>Pagar</strong>.</li>
             </ol>
 
             <h3>Qué revisar</h3>
@@ -276,9 +282,11 @@ MOCK_PAYMENT_WEBHOOK_SECRET=dev-secret</code></pre>
 
             <ol>
                 <li>Resetear estados.</li>
-                <li>Crear una suscripción desde StreamBox.</li>
+                <li>Crear una suscripción desde <strong>Suscripción y pago → Suscribirme</strong>.</li>
+                <li>Ir a <strong>Suscripción y pago → Pagar</strong>.</li>
+                <li>Elegir la suscripción creada.</li>
                 <li>Elegir la tarjeta <code>4000000000000341</code>.</li>
-                <li>Presionar <strong>Suscribirme y pagar</strong>.</li>
+                <li>Presionar <strong>Pagar</strong>.</li>
             </ol>
 
             <h3>Qué revisar</h3>
@@ -298,7 +306,7 @@ MOCK_PAYMENT_WEBHOOK_SECRET=dev-secret</code></pre>
             <h3>Preparación</h3>
 
             <ol>
-                <li>Crear una suscripción con tarjeta aprobada.</li>
+                <li>Crear una suscripción y pagarla con tarjeta aprobada.</li>
                 <li>Verificar que la suscripción quede activa.</li>
             </ol>
 
@@ -329,7 +337,7 @@ MOCK_PAYMENT_WEBHOOK_SECRET=dev-secret</code></pre>
             <h3>Preparación</h3>
 
             <ol>
-                <li>Crear una suscripción con pago aprobado.</li>
+                <li>Crear una suscripción y pagarla con pago aprobado.</li>
                 <li>Verificar que la suscripción esté activa.</li>
             </ol>
 
@@ -366,7 +374,7 @@ MOCK_PAYMENT_WEBHOOK_SECRET=dev-secret</code></pre>
             <h3>Preparación</h3>
 
             <ol>
-                <li>Crear una suscripción activa.</li>
+                <li>Crear una suscripción y pagarla para que quede activa.</li>
                 <li>Verificar el plan actual en <strong>Suscripciones internas</strong>.</li>
             </ol>
 
@@ -514,7 +522,7 @@ received internally=false</code></pre>
                 <li>Se puede abrir StreamBox desde el navegador.</li>
                 <li>Se puede abrir Mock Payment Studio desde el navegador.</li>
                 <li>StreamBox muestra configuración correcta de integración.</li>
-                <li>Se puede crear una suscripción con pago aprobado.</li>
+                <li>Se puede crear una suscripción y luego pagarla con resultado aprobado.</li>
                 <li>La suscripción interna queda activa.</li>
                 <li>El pago interno queda aprobado.</li>
                 <li>Mock Payment Studio muestra webhook entregado.</li>

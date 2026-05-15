@@ -52,7 +52,9 @@
             <p>
                 StreamBox Demo es una aplicación educativa que simula una plataforma que vende suscripciones.
                 Aunque usa pagos ficticios, sirve para pensar qué responsabilidades aparecen cuando una
-                aplicación real permite contratar, pagar, renovar, cancelar o cambiar un plan.
+                aplicación real permite contratar, pagar, renovar, cancelar o cambiar un plan. En una integración
+                real, contratar una suscripción y pagarla pueden ser pasos separados, y ambos deberían quedar
+                registrados con claridad.
             </p>
 
             <p>
@@ -78,7 +80,8 @@
                 <li>¿Qué monto y moneda se le informó?</li>
                 <li>¿Qué términos aceptó?</li>
                 <li>¿Qué proveedor de pagos se usó?</li>
-                <li>¿Qué ID externo devolvió la pasarela?</li>
+                <li>¿Qué ID externo devolvió la pasarela para la suscripción?</li>
+                <li>¿Qué ID externo devolvió la pasarela para el pago?</li>
                 <li>¿Qué webhook llegó?</li>
                 <li>¿La firma del webhook fue válida?</li>
                 <li>¿Qué estado interno tenía antes y después?</li>
@@ -305,6 +308,7 @@
                 <li>Nombre del plan.</li>
                 <li>Precio final.</li>
                 <li>Moneda.</li>
+                <li>Cuándo se crea la suscripción y cuándo se ejecuta el pago.</li>
                 <li>Periodicidad de cobro.</li>
                 <li>Fecha o condición de renovación.</li>
                 <li>Qué incluye el plan.</li>
@@ -648,7 +652,7 @@ UNIQUE(request_id)</code></pre>
                 <li>No guardar números completos de tarjeta.</li>
                 <li>No guardar CVV.</li>
                 <li>Usar checkout o tokenización del proveedor.</li>
-                <li>Guardar IDs internos y externos.</li>
+                <li>Guardar IDs internos y externos de suscripciones y pagos.</li>
                 <li>Guardar webhooks recibidos.</li>
                 <li>Validar firma de webhooks.</li>
                 <li>Consultar el recurso actualizado al proveedor.</li>

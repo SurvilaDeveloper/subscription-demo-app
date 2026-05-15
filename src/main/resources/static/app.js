@@ -6,7 +6,10 @@ const endpoints = {
     payments: "/api/demo/payments",
     events: "/api/demo/events",
     webhooks: "/api/demo/webhooks",
-    startSubscription: "/api/subscriptions/start",
+    createSubscription: "/api/subscriptions",
+
+    paySubscription: (subscriptionId) =>
+        `/api/subscriptions/${encodeURIComponent(subscriptionId)}/pay`,
 
     simulateRecurringCharge: (subscriptionId) =>
         `/api/subscriptions/${encodeURIComponent(subscriptionId)}/simulate-recurring-charge`,
@@ -44,7 +47,10 @@ const elements = {
     subscriptionForm: document.querySelector("#subscriptionForm"),
     planSelect: document.querySelector("#planSelect"),
     payerEmailInput: document.querySelector("#payerEmailInput"),
-    cardNumberInput: document.querySelector("#cardNumberInput"),
+
+    paymentForm: document.querySelector("#paymentForm"),
+    paymentSubscriptionSelect: document.querySelector("#paymentSubscriptionSelect"),
+    paymentCardNumberInput: document.querySelector("#paymentCardNumberInput"),
 
     recurringChargeForm: document.querySelector("#recurringChargeForm"),
     recurringSubscriptionSelect: document.querySelector("#recurringSubscriptionSelect"),
@@ -95,40 +101,65 @@ const helpDocs = [
     {
         id: "subscription-flow",
         title: "Flujo completo",
-        description: "Cómo se crea una suscripción y cómo se procesa el pago.",
+        description: "Cómo se crea una suscripción y cómo se paga después.",
         html: `
-            <h3>Flujo completo de suscripción</h3>
+        <h3>Flujo completo de suscripción y pago</h3>
 
-            <p>
-                El flujo principal muestra cómo una aplicación crea una suscripción y registra el resultado del pago.
-            </p>
+        <p>
+            El flujo principal está dividido en dos pasos para que se entienda mejor qué hace
+            la aplicación principal y qué hace la pasarela simulada.
+        </p>
 
-            <ol>
-                <li>El usuario elige un plan en StreamBox.</li>
-                <li>StreamBox crea una suscripción interna en estado <code>PENDING</code>.</li>
-                <li>StreamBox llama a <code>POST /preapproval</code> en Mock Payment Service.</li>
-                <li>Mock Payment Service devuelve un <code>provider_subscription_id</code>.</li>
-                <li>StreamBox guarda ese ID externo en su estado interno.</li>
-                <li>StreamBox simula el pago con tarjeta ficticia.</li>
-                <li>Mock Payment Service genera un pago y envía un webhook.</li>
-                <li>StreamBox recibe el webhook, valida la firma y consulta el recurso actualizado.</li>
-                <li>StreamBox actualiza su suscripción interna.</li>
-            </ol>
+        <h4>1. Suscribirme</h4>
 
-            <pre><code>StreamBox Demo
-  ↓ crea suscripción
-Mock Payment Service
-  ↓ genera pago
-Mock Payment Service
-  ↓ webhook firmado
-StreamBox Demo
-  ↓ valida firma y consulta pago
-StreamBox actualiza su estado interno</code></pre>
+        <ol>
+            <li>El usuario elige un plan en StreamBox.</li>
+            <li>StreamBox crea una suscripción interna en estado <code>PENDING</code>.</li>
+            <li>StreamBox llama a <code>POST /preapproval</code> en Mock Payment Service.</li>
+            <li>Mock Payment Service devuelve un <code>provider_subscription_id</code>.</li>
+            <li>StreamBox guarda ese ID externo en su estado interno.</li>
+            <li>La suscripción queda lista para pagar.</li>
+        </ol>
 
-            <div class="help-callout">
-                El punto más importante es que el webhook se trata como un aviso. Después de recibirlo, la app consulta el recurso actualizado.
-            </div>
-        `,
+        <h4>2. Pagar</h4>
+
+        <ol>
+            <li>El usuario selecciona una suscripción existente.</li>
+            <li>El usuario elige una tarjeta ficticia.</li>
+            <li>StreamBox llama a Mock Payment Service para simular el pago.</li>
+            <li>Mock Payment Service genera un pago.</li>
+            <li>Mock Payment Service envía un webhook firmado a StreamBox.</li>
+            <li>StreamBox recibe el webhook, valida la firma y consulta el recurso actualizado.</li>
+            <li>StreamBox actualiza su suscripción interna y registra el pago interno.</li>
+        </ol>
+
+        <pre><code>Suscribirme
+  ↓
+StreamBox crea suscripción interna PENDING
+  ↓
+Mock Payment Service crea preapproval
+  ↓
+StreamBox guarda providerSubscriptionId
+
+Pagar
+  ↓
+StreamBox solicita pago con tarjeta ficticia
+  ↓
+Mock Payment Service genera payment
+  ↓
+Mock Payment Service envía webhook
+  ↓
+StreamBox valida firma
+  ↓
+StreamBox consulta pago/preapproval
+  ↓
+StreamBox actualiza estado interno</code></pre>
+
+        <div class="help-callout">
+            El punto más importante es que crear la suscripción y pagarla son dos acciones separadas.
+            Esto hace que la demo se parezca más a una integración real.
+        </div>
+    `,
     },
     {
         id: "fake-cards",
@@ -139,6 +170,11 @@ StreamBox actualiza su estado interno</code></pre>
 
             <p>
                 Las tarjetas ficticias permiten forzar distintos resultados sin usar tarjetas reales.
+            </p>
+            
+            <p>
+                La tarjeta se elige en el formulario <strong>Pagar</strong>,
+                después de haber creado una suscripción.
             </p>
 
             <ul>
@@ -270,56 +306,61 @@ http://subscription-demo-app:8080/api/webhooks/mock-payment</code></pre>
         title: "Cómo leer el dashboard",
         description: "Qué significa cada sección visible en StreamBox.",
         html: `
-            <h3>Cómo leer el dashboard</h3>
+        <h3>Cómo leer el dashboard</h3>
 
-            <h4>Estado de la aplicación principal</h4>
+        <h4>Estado de la aplicación principal</h4>
 
-            <p>
-                Muestra cuántas suscripciones, pagos, eventos y webhooks recibió StreamBox.
-            </p>
+        <p>
+            Muestra cuántas suscripciones, pagos, eventos y webhooks recibió StreamBox.
+        </p>
 
-            <h4>Configuración de integración</h4>
+        <h4>Configuración de integración</h4>
 
-            <p>
-                Muestra las URLs reales usadas para hablar con Mock Payment Service y para recibir webhooks.
-            </p>
+        <p>
+            Muestra las URLs reales usadas para hablar con Mock Payment Service y para recibir webhooks.
+        </p>
 
-            <h4>Suscribirse a StreamBox</h4>
+        <h4>Suscripción y pago</h4>
 
-            <p>
-                Permite crear una suscripción, elegir un plan y simular el primer pago.
-            </p>
+        <p>
+            Esta sección está dividida en dos acciones.
+        </p>
 
-            <h4>Acciones sobre una suscripción</h4>
+        <ul>
+            <li><strong>Suscribirme:</strong> crea la suscripción interna y la preapproval en Mock Payment Service.</li>
+            <li><strong>Pagar:</strong> genera el pago inicial de una suscripción existente usando una tarjeta ficticia.</li>
+        </ul>
 
-            <p>
-                Permite simular cobros recurrentes, cambiar de plan o cancelar una suscripción.
-            </p>
+        <h4>Acciones sobre una suscripción</h4>
 
-            <h4>Suscripciones internas</h4>
+        <p>
+            Permite simular cobros recurrentes, cambiar de plan o cancelar una suscripción.
+        </p>
 
-            <p>
-                Muestra el estado que guarda StreamBox, no solo el estado del proveedor.
-            </p>
+        <h4>Suscripciones internas</h4>
 
-            <h4>Pagos internos</h4>
+        <p>
+            Muestra el estado que guarda StreamBox, no solo el estado del proveedor.
+        </p>
 
-            <p>
-                Muestra los pagos que StreamBox registró después de consultar al proveedor.
-            </p>
+        <h4>Pagos internos</h4>
 
-            <h4>Webhooks recibidos por StreamBox</h4>
+        <p>
+            Muestra los pagos que StreamBox registró después de consultar al proveedor.
+        </p>
 
-            <p>
-                Muestra los webhooks que llegaron a la aplicación principal, si la firma fue válida y si fueron procesados.
-            </p>
+        <h4>Webhooks recibidos por StreamBox</h4>
 
-            <h4>Eventos internos</h4>
+        <p>
+            Muestra los webhooks que llegaron a la aplicación principal, si la firma fue válida y si fueron procesados.
+        </p>
 
-            <p>
-                Es un log educativo que permite seguir el flujo paso a paso.
-            </p>
-        `,
+        <h4>Eventos internos</h4>
+
+        <p>
+            Es un log educativo que permite seguir el flujo paso a paso.
+        </p>
+    `,
     },
     {
         id: "code-to-emulate",
@@ -775,29 +816,57 @@ function tableEmptyRow(columns, message) {
     `;
 }
 
-async function startSubscription(event) {
+async function createSubscription(event) {
     event.preventDefault();
 
     const request = {
         plan_id: elements.planSelect.value,
         payer_email: elements.payerEmailInput.value.trim(),
-        card_number: elements.cardNumberInput.value,
     };
 
     try {
-        const response = await requestJson(endpoints.startSubscription, {
+        const response = await requestJson(endpoints.createSubscription, {
             method: "POST",
             body: JSON.stringify(request),
         });
 
         showMessage(
-            `Suscripción ${response.subscription.id} creada con estado ${response.subscription.status}. Pago: ${response.payment.status}.`
+            `Suscripción ${response.subscription.id} creada con estado ${response.subscription.status}. Ahora podés pagarla.`
         );
 
         await loadDashboard({ silent: true });
     } catch (error) {
         console.error(error);
-        showMessage(`No se pudo iniciar la suscripción: ${error.message}`, "error");
+        showMessage(`No se pudo crear la suscripción: ${error.message}`, "error");
+    }
+}
+
+async function paySubscription(event) {
+    event.preventDefault();
+
+    const subscriptionId = elements.paymentSubscriptionSelect.value;
+
+    if (!subscriptionId) {
+        showMessage("Primero tenés que seleccionar una suscripción.", "error");
+        return;
+    }
+
+    try {
+        const response = await requestJson(endpoints.paySubscription(subscriptionId), {
+            method: "POST",
+            body: JSON.stringify({
+                card_number: elements.paymentCardNumberInput.value,
+            }),
+        });
+
+        showMessage(
+            `Pago generado. Suscripción: ${response.subscription.status}. Pago: ${response.payment.status}.`
+        );
+
+        await loadDashboard({ silent: true });
+    } catch (error) {
+        console.error(error);
+        showMessage(`No se pudo pagar la suscripción: ${error.message}`, "error");
     }
 }
 
@@ -973,6 +1042,7 @@ function renderActionPlanSelect(plans) {
 
 function renderActionSubscriptionSelects(subscriptions) {
     const selects = [
+        elements.paymentSubscriptionSelect,
         elements.recurringSubscriptionSelect,
         elements.changePlanSubscriptionSelect,
         elements.cancelSubscriptionSelect,
@@ -1059,7 +1129,8 @@ document.addEventListener("keydown", (event) => {
     }
 });
 
-elements.subscriptionForm.addEventListener("submit", startSubscription);
+elements.subscriptionForm.addEventListener("submit", createSubscription);
+elements.paymentForm.addEventListener("submit", paySubscription);
 elements.recurringChargeForm.addEventListener("submit", simulateRecurringCharge);
 elements.changePlanForm.addEventListener("submit", changeSubscriptionPlan);
 elements.cancelSubscriptionForm.addEventListener("submit", cancelSubscription);

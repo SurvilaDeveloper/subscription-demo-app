@@ -24,6 +24,7 @@
         <p>
             Esta sección reúne documentación larga para entender cómo StreamBox Demo funciona como
             aplicación principal integrada con Mock Payment Service.
+            El flujo principal está separado en dos pasos: crear la suscripción y luego pagarla.
         </p>
 
         <div class="docs-grid">
@@ -31,7 +32,7 @@
                 <h2>Guía rápida de uso</h2>
                 <p>
                     Recorrido inicial para levantar Mock Payment Service, abrir StreamBox,
-                    crear una suscripción, pagar con tarjeta ficticia y revisar webhooks.
+                    crear una suscripción, pagarla con tarjeta ficticia y revisar webhooks.
                 </p>
                 <a class="docs-button" href="./quick-start.html">
                     Abrir guía
@@ -74,8 +75,9 @@
             <article class="docs-card">
                 <h2>Escenarios de prueba</h2>
                 <p>
-                    Guía práctica para probar pagos aprobados, rechazados, pendientes,
-                    cobros recurrentes, cambios de plan, cancelaciones, webhooks y resets.
+                    Guía práctica para probar creación de suscripciones, pagos aprobados,
+                    rechazados, pendientes, cobros recurrentes, cambios de plan, cancelaciones,
+                    webhooks y resets.
                 </p>
                 <a class="docs-button" href="./testing-scenarios.html">
                     Abrir guía
@@ -119,7 +121,7 @@
                 <h2>Referencia de endpoints</h2>
                 <p>
                     Resumen práctico de endpoints HTTP de StreamBox Demo para estado,
-                    configuración, planes, suscripciones, pagos, webhooks y eventos internos.
+                    configuración, planes, creación de suscripciones, pagos, webhooks y eventos internos.
                 </p>
                 <a class="docs-button" href="./api-reference.html">
                     Abrir guía
@@ -140,8 +142,8 @@
             <article class="docs-card">
                 <h2>Recorrido del código de pagos</h2>
                 <p>
-                    Guía comentada del código Java usado para crear suscripciones, llamar al mock,
-                    registrar pagos, recibir webhooks, validar firmas y actualizar estado interno.
+                    Guía comentada del código Java usado para crear suscripciones, pagarlas,
+                    llamar al mock, registrar pagos, recibir webhooks, validar firmas y actualizar estado interno.
                 </p>
                 <a class="docs-button" href="./payment-code-walkthrough.html">
                     Abrir guía

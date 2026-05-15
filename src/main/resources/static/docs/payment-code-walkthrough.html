@@ -26,7 +26,7 @@
             <a href="#mapa">Mapa general</a>
             <a href="#cliente">MockPaymentClient</a>
             <a href="#servicio">SubscriptionService</a>
-            <a href="#crear">Crear y pagar suscripción</a>
+            <a href="#crear">Crear suscripción y pagar</a>
             <a href="#recurrente">Cobro recurrente</a>
             <a href="#plan">Cambio de plan</a>
             <a href="#cancelacion">Cancelación</a>
@@ -56,15 +56,21 @@
 
             <h2 id="mapa">Mapa general del flujo</h2>
 
-            <pre><code>Usuario elige plan y tarjeta ficticia
+            <pre><code>Usuario elige plan y email
   ↓
-SubscriptionService.startSubscription(...)
+SubscriptionService.createSubscription(...)
   ↓
 Crea DemoSubscription interna en PENDING
   ↓
 MockPaymentClient.createPreapproval(...)
   ↓
 Guarda providerSubscriptionId
+  ↓
+La suscripción queda lista para pagar
+
+Usuario elige suscripción y tarjeta ficticia
+  ↓
+SubscriptionService.paySubscription(...)
   ↓
 MockPaymentClient.payWithCard(...)
   ↓
@@ -224,16 +230,25 @@ public class SubscriptionService {
                 <li>Mapear estados externos a estados internos.</li>
             </ul>
 
-            <h2 id="crear">3. Crear y pagar una suscripción</h2>
+            <h2 id="crear">3. Crear suscripción y pagar después</h2>
 
             <p>
-                El método <code>startSubscription</code> representa el flujo inicial cuando el usuario elige
-                un plan y paga.
+                El flujo principal ahora está dividido en dos métodos. Primero se crea la suscripción
+                interna y la preapproval en Mock Payment Service. Después se paga una suscripción existente
+                con una tarjeta ficticia.
             </p>
 
-            <pre><code>public StartSubscriptionResponse startSubscription(StartSubscriptionRequest request) {
+            <h3>Crear suscripción</h3>
+
+            <p>
+                El método <code>createSubscription</code> representa el paso <strong>Suscribirme</strong>.
+                Todavía no genera un pago. Su objetivo es dejar creada la suscripción interna y asociarla
+                con una preapproval del proveedor simulado.
+            </p>
+
+            <pre><code>public CreateSubscriptionResponse createSubscription(CreateSubscriptionRequest request) {
     Plan plan = planCatalogService.findById(request.planId())
-            .orElseThrow(() -> new BadRequestException("Plan not found: " + request.planId()));
+            .orElseThrow(() -&gt; new BadRequestException("Plan not found: " + request.planId()));
 
     Instant now = Instant.now();
 
@@ -257,10 +272,45 @@ public class SubscriptionService {
     );
 
     subscription.setProviderSubscriptionId(preapproval.id());
+    subscription.setStatus(mapPreapprovalStatus(preapproval.status()));
     store.saveSubscription(subscription);
 
-    MockPayWithCardResponse payResponse = mockPaymentClient.payWithCard(
+    return new CreateSubscriptionResponse(
+            subscription,
             preapproval.id(),
+            preapproval.status()
+    );
+}</code></pre>
+
+            <h3>Qué está pasando al suscribirse</h3>
+
+            <ol>
+                <li>Busca el plan elegido.</li>
+                <li>Crea una suscripción interna en estado <code>PENDING</code>.</li>
+                <li>Guarda la suscripción en el store.</li>
+                <li>Llama a Mock Payment Service para crear una preapproval.</li>
+                <li>Guarda el ID externo del proveedor en <code>providerSubscriptionId</code>.</li>
+                <li>Devuelve la suscripción creada y el estado externo de la preapproval.</li>
+            </ol>
+
+            <h3>Pagar una suscripción existente</h3>
+
+            <p>
+                El método <code>paySubscription</code> representa el paso <strong>Pagar</strong>.
+                Toma una suscripción interna existente, usa su <code>providerSubscriptionId</code>
+                y solicita a Mock Payment Service que genere un pago con tarjeta ficticia.
+            </p>
+
+            <pre><code>public SubscriptionActionResponse paySubscription(
+        String subscriptionId,
+        PaySubscriptionRequest request
+) {
+    DemoSubscription subscription = getSubscriptionOrThrow(subscriptionId);
+
+    ensureProviderSubscription(subscription);
+
+    MockPayWithCardResponse payResponse = mockPaymentClient.payWithCard(
+            subscription.getProviderSubscriptionId(),
             buildPayWithCardRequest(request.cardNumber())
     );
 
@@ -272,31 +322,28 @@ public class SubscriptionService {
             payResponse.payment()
     );
 
-    return new StartSubscriptionResponse(
+    return new SubscriptionActionResponse(
             subscription,
             payment,
-            preapproval.id(),
+            subscription.getProviderSubscriptionId(),
             payResponse.payment().id(),
             payResponse.preapprovalStatus(),
             payResponse.payment().status()
     );
 }</code></pre>
 
-            <h3>Qué está pasando paso a paso</h3>
+            <h3>Qué está pasando al pagar</h3>
 
             <ol>
-                <li>Busca el plan elegido.</li>
-                <li>Crea una suscripción interna en estado <code>PENDING</code>.</li>
-                <li>Guarda la suscripción en el store.</li>
-                <li>Llama a Mock Payment Service para crear una preapproval.</li>
-                <li>Guarda el ID externo del proveedor en <code>providerSubscriptionId</code>.</li>
-                <li>Simula el pago con tarjeta ficticia.</li>
-                <li>Mapea el estado del proveedor a un estado interno.</li>
+                <li>Busca la suscripción interna por ID.</li>
+                <li>Verifica que tenga <code>providerSubscriptionId</code>.</li>
+                <li>Simula el pago con tarjeta ficticia en Mock Payment Service.</li>
+                <li>Mapea el estado de la preapproval externa a estado interno.</li>
                 <li>Guarda el pago interno si todavía no existe.</li>
                 <li>Devuelve una respuesta educativa con datos internos y externos.</li>
             </ol>
 
-            <h3>Pedido enviado al proveedor</h3>
+            <h3>Pedido enviado al proveedor al crear la preapproval</h3>
 
             <p>
                 StreamBox arma el request hacia Mock Payment Service con el plan, email, monto,
@@ -326,8 +373,14 @@ public class SubscriptionService {
             <pre><code>webhookBaseUrl + "/api/webhooks/mock-payment"</code></pre>
 
             <p>
-                Esa URL es donde Mock Payment Service va a enviar los webhooks.
+                Esa URL es donde Mock Payment Service va a enviar los webhooks cuando se genere un pago
+                o cambie el estado de la preapproval.
             </p>
+
+            <div class="docs-callout">
+                El endpoint legacy <code>POST /api/subscriptions/start</code> puede seguir existiendo para
+                compatibilidad, pero el flujo principal de la UI usa dos pasos: crear suscripción y pagar.
+            </div>
 
             <h2 id="recurrente">4. Simular cobro recurrente</h2>
 

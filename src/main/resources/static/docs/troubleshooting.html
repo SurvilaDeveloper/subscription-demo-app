@@ -170,8 +170,8 @@ subscription-demo-app</code></pre>
             <h2 id="mock-no-conecta">StreamBox no conecta con Mock Payment Service</h2>
 
             <p>
-                Síntoma típico: al intentar suscribirse, StreamBox falla al crear la preapproval
-                o al simular el pago.
+                Síntoma típico: al presionar <strong>Suscribirme</strong>, StreamBox falla al crear la preapproval,
+                o al presionar <strong>Pagar</strong>, falla al simular el pago.
             </p>
 
             <h3>Revisar que Mock esté levantado</h3>
@@ -422,6 +422,12 @@ docker compose up --build</code></pre>
                 Si el pago aparece en Mock Payment Service pero no aparece en StreamBox, revisar:
             </p>
 
+            <div class="docs-callout">
+                Recordá que el flujo está separado: primero hay que crear la suscripción con
+                <strong>Suscribirme</strong> y después generar el pago inicial con <strong>Pagar</strong>.
+                Si solo se creó la suscripción, todavía no debería existir un pago interno.
+            </div>
+
             <ol>
                 <li>Si el webhook fue enviado.</li>
                 <li>Si Mock Payment Studio muestra <code>delivered=true</code>.</li>
@@ -534,7 +540,8 @@ Eventos internos</code></pre>
                 <li><code>MOCK_PAYMENT_BASE_URL</code> es correcto.</li>
                 <li><code>DEMO_APP_WEBHOOK_BASE_URL</code> es correcto.</li>
                 <li>El secret coincide en ambos servicios.</li>
-                <li>Se puede crear una suscripción desde StreamBox.</li>
+                <li>Se puede crear una suscripción desde StreamBox con <strong>Suscribirme</strong>.</li>
+                <li>Se puede pagar una suscripción existente con <strong>Pagar</strong>.</li>
                 <li>Mock Payment Service genera el pago.</li>
                 <li>Mock Payment Studio muestra el webhook saliente.</li>
                 <li>StreamBox muestra el webhook recibido.</li>

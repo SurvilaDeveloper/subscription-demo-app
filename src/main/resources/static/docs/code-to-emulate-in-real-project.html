@@ -214,7 +214,7 @@ Crear suscripción en proveedor
   ↓
 Guardar providerSubscriptionId
   ↓
-Procesar pago inicial o esperar confirmación
+Iniciar o confirmar pago sobre una suscripción existente
   ↓
 Registrar pago interno
   ↓
@@ -440,7 +440,8 @@ mobile app</code></pre>
     MockPaymentClient.java
 
   dto/
-    StartSubscriptionRequest.java
+    CreateSubscriptionRequest.java
+    PaySubscriptionRequest.java
     BillingSubscriptionResponse.java
 
   dto/provider/
@@ -468,9 +469,18 @@ mobile app</code></pre>
 
             <pre><code>1. Validar plan interno.
 2. Crear suscripción local en PENDING.
-3. Llamar al proveedor.
-4. Guardar providerSubscriptionId.
-5. Devolver init_point o estado inicial al frontend.</code></pre>
+3. Crear suscripción, preapproval o checkout en el proveedor.
+4. Guardar providerSubscriptionId o providerCheckoutSessionId.
+5. Devolver estado inicial, init_point o datos necesarios al frontend.</code></pre>
+
+            <h3>Pagar una suscripción existente</h3>
+
+            <pre><code>1. Recibir el ID interno de la suscripción.
+2. Verificar que exista y tenga providerSubscriptionId.
+3. Iniciar o confirmar el pago según el proveedor.
+4. Guardar providerPaymentId cuando exista.
+5. Registrar el pago interno.
+6. Esperar o procesar confirmación por webhook.</code></pre>
 
             <h3>Recibir webhook</h3>
 
@@ -516,9 +526,13 @@ Agregar configuración por variables de entorno.</code></pre>
   ↓
 chatbot-platform-api crea BusinessSubscription PENDING
   ↓
-chatbot-platform-api llama al proveedor
+chatbot-platform-api crea suscripción/preapproval en proveedor
   ↓
 guarda providerSubscriptionId
+  ↓
+BUSINESS_ADMIN inicia o confirma el pago
+  ↓
+chatbot-platform-api registra BusinessPayment cuando exista providerPaymentId
   ↓
 recibe webhook
   ↓
@@ -561,7 +575,8 @@ mapeo de estados
 auditoría de eventos</code></pre>
 
             <div class="docs-callout">
-                StreamBox Demo es útil porque muestra ese flujo completo en una versión pequeña, visible y fácil de probar.
+                StreamBox Demo es útil porque muestra ese flujo completo en una versión pequeña, visible y fácil de probar,
+                separando claramente la creación de la suscripción del intento de pago.
             </div>
         </main>
     </div>

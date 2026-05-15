@@ -50,6 +50,13 @@
                 llamarse entre sí.
             </p>
 
+            <p>
+                En el flujo actual, StreamBox separa dos acciones: primero se crea la suscripción
+                y la preapproval; después se paga una suscripción existente con una tarjeta ficticia.
+                Esa separación no cambia la configuración de Docker, pero ayuda a entender mejor qué
+                servicio llama a cuál.
+            </p>
+
             <div class="docs-callout">
                 Regla principal: el navegador usa <code>localhost</code>, pero un contenedor debe llamar
                 a otro contenedor usando el nombre del servicio o del contenedor dentro de la red Docker.
@@ -62,7 +69,9 @@
 http://localhost:8080/
   ↓
 StreamBox Demo container
-  ↓ llama al proveedor simulado
+  ↓ Suscribirme: crea preapproval
+http://mock-payment-service:9090
+  ↓ Pagar: genera payment
 http://mock-payment-service:9090
   ↓
 Mock Payment Service container
@@ -511,6 +520,8 @@ docker compose up --build</code></pre>
                 <li>El secret coincide en ambos servicios.</li>
                 <li>El navegador abre StreamBox con el puerto publicado correcto.</li>
                 <li>El navegador abre Mock Payment Studio con el puerto publicado correcto.</li>
+                <li>Se puede usar <strong>Suscribirme</strong> para crear la preapproval.</li>
+                <li>Se puede usar <strong>Pagar</strong> para generar el pago y recibir el webhook.</li>
             </ol>
 
             <div class="docs-callout">

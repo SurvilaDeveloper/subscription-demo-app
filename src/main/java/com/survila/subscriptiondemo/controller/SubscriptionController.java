@@ -1,6 +1,9 @@
 package com.survila.subscriptiondemo.controller;
 
 import com.survila.subscriptiondemo.dto.ChangeSubscriptionPlanRequest;
+import com.survila.subscriptiondemo.dto.CreateSubscriptionRequest;
+import com.survila.subscriptiondemo.dto.CreateSubscriptionResponse;
+import com.survila.subscriptiondemo.dto.PaySubscriptionRequest;
 import com.survila.subscriptiondemo.dto.SimulateRecurringChargeRequest;
 import com.survila.subscriptiondemo.dto.StartSubscriptionRequest;
 import com.survila.subscriptiondemo.dto.StartSubscriptionResponse;
@@ -17,6 +20,21 @@ public class SubscriptionController {
 
     public SubscriptionController(SubscriptionService subscriptionService) {
         this.subscriptionService = subscriptionService;
+    }
+
+    @PostMapping
+    public CreateSubscriptionResponse createSubscription(
+            @Valid @RequestBody CreateSubscriptionRequest request
+    ) {
+        return subscriptionService.createSubscription(request);
+    }
+
+    @PostMapping("/{id}/pay")
+    public SubscriptionActionResponse paySubscription(
+            @PathVariable String id,
+            @Valid @RequestBody PaySubscriptionRequest request
+    ) {
+        return subscriptionService.paySubscription(id, request);
     }
 
     @PostMapping("/start")

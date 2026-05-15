@@ -31,6 +31,8 @@
             <a href="#estado">Estado de la demo</a>
             <a href="#planes">Planes</a>
             <a href="#suscripcion">Crear suscripción</a>
+            <a href="#pagar">Pagar suscripción</a>
+            <a href="#legacy-start">Endpoint combinado legacy</a>
             <a href="#acciones">Acciones sobre suscripciones</a>
             <a href="#listas">Listados internos</a>
             <a href="#webhook">Webhook receiver</a>
@@ -110,8 +112,18 @@
                 </tr>
                 <tr>
                     <td><code>POST</code></td>
+                    <td><code>/api/subscriptions</code></td>
+                    <td>Crear suscripción interna y preapproval en Mock Payment Service.</td>
+                </tr>
+                <tr>
+                    <td><code>POST</code></td>
+                    <td><code>/api/subscriptions/{id}/pay</code></td>
+                    <td>Generar pago inicial sobre una suscripción existente.</td>
+                </tr>
+                <tr>
+                    <td><code>POST</code></td>
                     <td><code>/api/subscriptions/start</code></td>
-                    <td>Crear suscripción interna y simular pago inicial.</td>
+                    <td>Endpoint combinado legacy: crear suscripción y pagar en un solo request.</td>
                 </tr>
                 <tr>
                     <td><code>POST</code></td>
@@ -186,8 +198,8 @@
 
             <p>
                 Desde la UI se pueden probar las mismas operaciones principales:
-                crear suscripción, simular cobro recurrente, cambiar plan, cancelar,
-                ver pagos, ver webhooks y revisar eventos internos.
+                crear suscripción, pagar una suscripción existente, simular cobro recurrente,
+                cambiar plan, cancelar, ver pagos, ver webhooks y revisar eventos internos.
             </p>
 
             <h2 id="info">Información de integración</h2>
@@ -311,11 +323,100 @@
                 </tbody>
             </table>
 
-            <h2 id="suscripcion">Crear suscripción y simular pago inicial</h2>
+            <h2 id="suscripcion">Crear suscripción</h2>
 
             <p>
-                Crea una suscripción interna en StreamBox, crea una preapproval en Mock Payment Service,
-                guarda el ID externo y simula el pago inicial con una tarjeta ficticia.
+                Crea una suscripción interna en StreamBox, crea una preapproval en Mock Payment Service
+                y guarda el ID externo del proveedor. En este paso todavía no se genera el pago.
+            </p>
+
+            <pre><code>POST /api/subscriptions</code></pre>
+
+            <h3>Body</h3>
+
+            <pre><code>{
+  "plan_id": "basic",
+  "payer_email": "cliente@test.com"
+}</code></pre>
+
+            <h3>Ejemplo con curl</h3>
+
+            <pre><code>curl -X POST http://localhost:8080/api/subscriptions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "plan_id": "basic",
+    "payer_email": "cliente@test.com"
+  }'</code></pre>
+
+            <h3>Resultado esperado</h3>
+
+            <pre><code>subscription.status = PENDING
+provider_subscription_id = mock-preapproval-1
+provider_subscription_status = pending</code></pre>
+
+            <h3>Qué hace internamente</h3>
+
+            <pre><code>1. Valida el plan.
+2. Crea DemoSubscription en PENDING.
+3. Llama a Mock Payment Service.
+4. Crea una preapproval.
+5. Guarda providerSubscriptionId.
+6. Deja la suscripción lista para pagar.</code></pre>
+
+            <div class="docs-callout">
+                Este endpoint representa la acción <strong>Suscribirme</strong> de la UI.
+                Crea la suscripción, pero no intenta cobrar todavía.
+            </div>
+
+            <h2 id="pagar">Pagar suscripción</h2>
+
+            <p>
+                Genera el pago inicial de una suscripción existente usando una tarjeta ficticia.
+                Este endpoint requiere que la suscripción ya tenga un <code>providerSubscriptionId</code>.
+            </p>
+
+            <pre><code>POST /api/subscriptions/{id}/pay</code></pre>
+
+            <h3>Body</h3>
+
+            <pre><code>{
+  "card_number": "4111111111111111"
+}</code></pre>
+
+            <h3>Ejemplo con curl</h3>
+
+            <pre><code>curl -X POST http://localhost:8080/api/subscriptions/demo-subscription-1/pay \
+  -H "Content-Type: application/json" \
+  -d '{
+    "card_number": "4111111111111111"
+  }'</code></pre>
+
+            <h3>Resultado esperado con tarjeta aprobada</h3>
+
+            <pre><code>subscription.status = ACTIVE
+payment.status = APPROVED</code></pre>
+
+            <h3>Qué hace internamente</h3>
+
+            <pre><code>1. Busca la suscripción interna.
+2. Verifica que tenga providerSubscriptionId.
+3. Simula el pago con tarjeta ficticia.
+4. Mock Payment Service crea un payment.
+5. StreamBox guarda DemoPayment.
+6. StreamBox actualiza el estado interno.
+7. Mock Payment Service envía webhook.
+8. StreamBox recibe y procesa el webhook.</code></pre>
+
+            <div class="docs-callout">
+                Este endpoint representa la acción <strong>Pagar</strong> de la UI.
+                La suscripción y el pago quedan separados para que el flujo sea más parecido a una integración real.
+            </div>
+
+            <h2 id="legacy-start">Endpoint combinado legacy</h2>
+
+            <p>
+                El endpoint anterior se conserva por compatibilidad y para pruebas rápidas.
+                Crea la suscripción y simula el pago inicial en un solo request.
             </p>
 
             <pre><code>POST /api/subscriptions/start</code></pre>
@@ -338,21 +439,10 @@
     "card_number": "4111111111111111"
   }'</code></pre>
 
-            <h3>Resultado esperado con tarjeta aprobada</h3>
-
-            <pre><code>subscription.status = ACTIVE
-payment.status = APPROVED</code></pre>
-
-            <h3>Qué hace internamente</h3>
-
-            <pre><code>1. Valida el plan.
-2. Crea DemoSubscription en PENDING.
-3. Llama a Mock Payment Service.
-4. Guarda providerSubscriptionId.
-5. Simula pago inicial.
-6. Guarda DemoPayment.
-7. Actualiza estado interno.
-8. Recibe y procesa webhook.</code></pre>
+            <p>
+                La UI nueva no usa este endpoint como flujo principal. Usa <code>POST /api/subscriptions</code>
+                para suscribirse y <code>POST /api/subscriptions/{id}/pay</code> para pagar.
+            </p>
 
             <h2 id="acciones">Acciones sobre suscripciones</h2>
 
@@ -537,19 +627,22 @@ x-signature</code></pre>
 3. Ver planes:
    GET /api/plans
 
-4. Crear suscripción y pago:
-   POST /api/subscriptions/start
+4. Crear suscripción:
+   POST /api/subscriptions
 
 5. Ver suscripciones internas:
    GET /api/demo/subscriptions
 
-6. Ver pagos internos:
+6. Pagar la suscripción:
+   POST /api/subscriptions/{id}/pay
+
+7. Ver pagos internos:
    GET /api/demo/payments
 
-7. Ver webhooks recibidos:
+8. Ver webhooks recibidos:
    GET /api/demo/webhooks
 
-8. Ver eventos internos:
+9. Ver eventos internos:
    GET /api/demo/events</code></pre>
 
             <h3>Comandos</h3>
@@ -560,15 +653,20 @@ curl -X DELETE http://localhost:8080/api/demo/state
 
 curl http://localhost:8080/api/plans
 
-curl -X POST http://localhost:8080/api/subscriptions/start \
+curl -X POST http://localhost:8080/api/subscriptions \
   -H "Content-Type: application/json" \
   -d '{
     "plan_id": "basic",
-    "payer_email": "cliente@test.com",
-    "card_number": "4111111111111111"
+    "payer_email": "cliente@test.com"
   }'
 
 curl http://localhost:8080/api/demo/subscriptions
+
+curl -X POST http://localhost:8080/api/subscriptions/demo-subscription-1/pay \
+  -H "Content-Type: application/json" \
+  -d '{
+    "card_number": "4111111111111111"
+  }'
 
 curl http://localhost:8080/api/demo/payments
 
@@ -586,8 +684,7 @@ curl http://localhost:8080/api/demo/events</code></pre>
 
             <pre><code>{
   "plan_id": "unknown",
-  "payer_email": "cliente@test.com",
-  "card_number": "4111111111111111"
+  "payer_email": "cliente@test.com"
 }</code></pre>
 
             <p>
@@ -613,8 +710,8 @@ enterprise</code></pre>
             <h3>Mock Payment Service no disponible</h3>
 
             <p>
-                Si <code>POST /api/subscriptions/start</code> falla al crear la preapproval o al pagar,
-                revisar:
+                Si <code>POST /api/subscriptions</code> falla al crear la preapproval, o si
+                <code>POST /api/subscriptions/{id}/pay</code> falla al pagar, revisar:
             </p>
 
             <ul>

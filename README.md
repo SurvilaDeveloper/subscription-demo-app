@@ -2,7 +2,7 @@
 
 Aplicación demo local para aprender cómo una aplicación principal puede integrarse con un servicio de pagos simulado.
 
-La UI representa una plataforma ficticia de streaming llamada **StreamBox Demo**. Permite elegir un plan, simular un pago con tarjeta ficticia, recibir webhooks firmados desde `mock-payment-service` y mostrar cómo la aplicación principal actualiza su propio estado interno.
+La UI representa una plataforma ficticia de streaming llamada **StreamBox Demo**. Permite elegir un plan, crear una suscripción, pagarla con tarjeta ficticia, recibir webhooks firmados desde `mock-payment-service` y mostrar cómo la aplicación principal actualiza su propio estado interno.
 
 Está pensada para funcionar junto con:
 
@@ -31,9 +31,11 @@ Mientras `mock-payment-service` simula la pasarela de pago, StreamBox Demo simul
 ```txt
 Crea una suscripción interna
         ↓
-Llama a la pasarela simulada
+Llama a la pasarela simulada para crear una preapproval
         ↓
-Simula un pago con tarjeta ficticia
+Guarda el provider_subscription_id
+        ↓
+Permite pagar una suscripción existente con tarjeta ficticia
         ↓
 Recibe un webhook firmado
         ↓
@@ -62,8 +64,9 @@ Actualiza su estado interno
 - UI local servida desde Spring Boot.
 - Catálogo de planes hardcodeados.
 - Creación de suscripciones internas.
+- Flujo separado entre crear suscripción y pagar.
 - Integración HTTP con `mock-payment-service`.
-- Simulación de pago inicial con tarjeta ficticia.
+- Pago inicial con tarjeta ficticia sobre una suscripción existente.
 - Simulación de cobros recurrentes.
 - Cambio de plan.
 - Cancelación de suscripción.
@@ -486,7 +489,8 @@ La UI permite:
 
 - Ver estado general de la aplicación principal.
 - Ver configuración real de integración.
-- Crear una suscripción y pagarla.
+- Crear una suscripción.
+- Pagar una suscripción existente con tarjeta ficticia.
 - Simular cobros recurrentes.
 - Cambiar el plan de una suscripción.
 - Cancelar una suscripción.
@@ -547,22 +551,68 @@ curl -X DELETE http://localhost:8085/api/demo/state
 
 ---
 
-## 2. Crear suscripción y pagar
+## 2. Crear suscripción
 
 Endpoint:
 
 ```txt
-POST /api/subscriptions/start
+POST /api/subscriptions
 ```
 
 Ejemplo con puerto por defecto:
 
 ```bash
-curl -X POST http://localhost:8080/api/subscriptions/start \
+curl -X POST http://localhost:8080/api/subscriptions \
   -H "Content-Type: application/json" \
   -d '{
     "plan_id": "basic",
-    "payer_email": "cliente@test.com",
+    "payer_email": "cliente@test.com"
+  }'
+```
+
+Ejemplo con puerto publicado alternativo:
+
+```bash
+curl -X POST http://localhost:8085/api/subscriptions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "plan_id": "basic",
+    "payer_email": "cliente@test.com"
+  }'
+```
+
+Resultado esperado:
+
+```txt
+subscription.status = PENDING
+provider_subscription_id = mock-preapproval-...
+```
+
+La app internamente hace:
+
+```txt
+1. Crea una suscripción interna PENDING.
+2. Llama a POST /preapproval en mock-payment-service.
+3. Guarda el provider_subscription_id.
+4. Deja la suscripción lista para pagar.
+```
+
+---
+
+## 3. Pagar suscripción
+
+Endpoint:
+
+```txt
+POST /api/subscriptions/{id}/pay
+```
+
+Ejemplo con puerto por defecto:
+
+```bash
+curl -X POST http://localhost:8080/api/subscriptions/demo-subscription-1/pay \
+  -H "Content-Type: application/json" \
+  -d '{
     "card_number": "4111111111111111"
   }'
 ```
@@ -570,16 +620,14 @@ curl -X POST http://localhost:8080/api/subscriptions/start \
 Ejemplo con puerto publicado alternativo:
 
 ```bash
-curl -X POST http://localhost:8085/api/subscriptions/start \
+curl -X POST http://localhost:8085/api/subscriptions/demo-subscription-1/pay \
   -H "Content-Type: application/json" \
   -d '{
-    "plan_id": "basic",
-    "payer_email": "cliente@test.com",
     "card_number": "4111111111111111"
   }'
 ```
 
-Resultado esperado:
+Resultado esperado con tarjeta aprobada:
 
 ```txt
 subscription.status = ACTIVE
@@ -589,22 +637,38 @@ payment.status = APPROVED
 La app internamente hace:
 
 ```txt
-1. Crea una suscripción interna PENDING.
-2. Llama a POST /preapproval en mock-payment-service.
-3. Guarda el provider_subscription_id.
-4. Simula el pago con tarjeta.
-5. Registra el pago interno.
-6. Recibe webhook.
-7. Valida firma.
-8. Consulta recurso actualizado.
-9. Actualiza estado interno.
+1. Busca la suscripción interna.
+2. Usa el provider_subscription_id guardado.
+3. Simula el pago con tarjeta ficticia en mock-payment-service.
+4. Registra el pago interno.
+5. Recibe webhook.
+6. Valida firma.
+7. Consulta recurso actualizado.
+8. Actualiza estado interno.
+```
+
+---
+
+## Endpoint combinado legacy
+
+También existe el endpoint combinado anterior:
+
+```txt
+POST /api/subscriptions/start
+```
+
+Ese endpoint crea la suscripción y simula el pago inicial en una sola llamada. Se mantiene por compatibilidad, pero el flujo principal de la UI usa los pasos separados:
+
+```txt
+POST /api/subscriptions
+POST /api/subscriptions/{id}/pay
 ```
 
 ---
 
 # Tarjetas ficticias
 
-Las tarjetas ficticias pertenecen a `mock-payment-service`, pero StreamBox las usa para simular pagos.
+Las tarjetas ficticias pertenecen a `mock-payment-service`, pero StreamBox las usa en el paso **Pagar** para simular pagos sobre una suscripción existente.
 
 | Tarjeta | Resultado |
 |---|---|
@@ -908,7 +972,9 @@ Respuesta esperada en Docker usando `DEMO_APP_HOST_PORT=8085` y `DEMO_APP_PUBLIC
 | `GET` | `/api/demo/state` | Estado general de la demo |
 | `DELETE` | `/api/demo/state` | Resetear estado |
 | `GET` | `/api/plans` | Listar planes disponibles |
-| `POST` | `/api/subscriptions/start` | Crear suscripción y simular pago inicial |
+| `POST` | `/api/subscriptions` | Crear suscripción interna y preapproval |
+| `POST` | `/api/subscriptions/{id}/pay` | Pagar una suscripción existente con tarjeta ficticia |
+| `POST` | `/api/subscriptions/start` | Crear suscripción y simular pago inicial en una sola llamada legacy |
 | `POST` | `/api/subscriptions/{id}/simulate-recurring-charge` | Simular cobro recurrente |
 | `POST` | `/api/subscriptions/{id}/change-plan` | Cambiar plan |
 | `POST` | `/api/subscriptions/{id}/cancel` | Cancelar suscripción |
@@ -958,14 +1024,36 @@ curl -X DELETE http://localhost:8085/api/demo/state
 
 ---
 
-## 2. Crear suscripción aprobada
+## 2. Crear suscripción
 
 ```bash
-curl -X POST http://localhost:8080/api/subscriptions/start \
+curl -X POST http://localhost:8080/api/subscriptions \
   -H "Content-Type: application/json" \
   -d '{
     "plan_id": "basic",
-    "payer_email": "cliente@test.com",
+    "payer_email": "cliente@test.com"
+  }'
+```
+
+Si StreamBox está publicado en otro puerto:
+
+```bash
+curl -X POST http://localhost:8085/api/subscriptions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "plan_id": "basic",
+    "payer_email": "cliente@test.com"
+  }'
+```
+
+---
+
+## 3. Pagar suscripción
+
+```bash
+curl -X POST http://localhost:8080/api/subscriptions/demo-subscription-1/pay \
+  -H "Content-Type: application/json" \
+  -d '{
     "card_number": "4111111111111111"
   }'
 ```
@@ -973,18 +1061,16 @@ curl -X POST http://localhost:8080/api/subscriptions/start \
 Si StreamBox está publicado en otro puerto:
 
 ```bash
-curl -X POST http://localhost:8085/api/subscriptions/start \
+curl -X POST http://localhost:8085/api/subscriptions/demo-subscription-1/pay \
   -H "Content-Type: application/json" \
   -d '{
-    "plan_id": "basic",
-    "payer_email": "cliente@test.com",
     "card_number": "4111111111111111"
   }'
 ```
 
 ---
 
-## 3. Ver webhooks recibidos por StreamBox
+## 4. Ver webhooks recibidos por StreamBox
 
 ```bash
 curl http://localhost:8080/api/demo/webhooks
@@ -1000,7 +1086,7 @@ action = payment.created
 
 ---
 
-## 4. Ver eventos internos
+## 5. Ver eventos internos
 
 ```bash
 curl http://localhost:8080/api/demo/events
@@ -1019,7 +1105,7 @@ SUBSCRIPTION_UPDATED_FROM_WEBHOOK
 
 ---
 
-## 5. Ver en Mock Payment Studio
+## 6. Ver en Mock Payment Studio
 
 Abrir:
 
