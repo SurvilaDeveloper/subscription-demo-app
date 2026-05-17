@@ -300,13 +300,13 @@ http://subscription-demo-app:8080/api/webhooks/mock-payment</code></pre>
                 Flujo esperado:
             </p>
 
-            <pre><code>StreamBox crea suscripción interna PENDING
+            <pre><code>StreamBox crea suscripción interna CREATING
   ↓
 StreamBox llama a Mock Payment Service
   ↓
 Mock crea preapproval
   ↓
-StreamBox guarda providerSubscriptionId
+StreamBox guarda providerSubscriptionId y pasa a PENDING
   ↓
 La suscripción queda lista para pagar</code></pre>
 

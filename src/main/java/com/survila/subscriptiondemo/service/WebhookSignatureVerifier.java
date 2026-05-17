@@ -22,26 +22,26 @@ public class WebhookSignatureVerifier {
 
     public void verifyOrThrow(String dataId, String requestId, String signatureHeader) {
         if (dataId == null || dataId.isBlank()) {
-            throw new BadRequestException("Missing data.id in webhook payload.");
+            throw new BadRequestException("El webhook no incluye data.id en el payload.");
         }
 
         if (requestId == null || requestId.isBlank()) {
-            throw new BadRequestException("Missing x-request-id header.");
+            throw new BadRequestException("El webhook no incluye el header x-request-id.");
         }
 
         if (signatureHeader == null || signatureHeader.isBlank()) {
-            throw new BadRequestException("Missing x-signature header.");
+            throw new BadRequestException("El webhook no incluye el header x-signature.");
         }
 
         String timestampValue = extractSignaturePart(signatureHeader, "ts");
         String receivedHash = extractSignaturePart(signatureHeader, "v1");
 
         if (timestampValue == null || timestampValue.isBlank()) {
-            throw new BadRequestException("Missing ts in x-signature header.");
+            throw new BadRequestException("El header x-signature no incluye ts.");
         }
 
         if (receivedHash == null || receivedHash.isBlank()) {
-            throw new BadRequestException("Missing v1 in x-signature header.");
+            throw new BadRequestException("El header x-signature no incluye v1.");
         }
 
         long timestamp;
@@ -49,7 +49,7 @@ public class WebhookSignatureVerifier {
         try {
             timestamp = Long.parseLong(timestampValue);
         } catch (NumberFormatException ex) {
-            throw new BadRequestException("Invalid ts in x-signature header.");
+            throw new BadRequestException("El valor ts del header x-signature no es válido.");
         }
 
         String expectedHash = createHash(dataId, requestId, timestamp);
@@ -60,7 +60,7 @@ public class WebhookSignatureVerifier {
         );
 
         if (!valid) {
-            throw new BadRequestException("Invalid webhook signature.");
+            throw new BadRequestException("La firma del webhook no es válida.");
         }
     }
 
@@ -105,7 +105,7 @@ public class WebhookSignatureVerifier {
 
             return result.toString();
         } catch (Exception ex) {
-            throw new IllegalStateException("Could not verify webhook signature.", ex);
+            throw new IllegalStateException("No se pudo verificar la firma del webhook.", ex);
         }
     }
 }

@@ -37,6 +37,11 @@ public class SubscriptionController {
         return subscriptionService.paySubscription(id, request);
     }
 
+    @PostMapping("/{id}/reconcile-provider")
+    public CreateSubscriptionResponse reconcileProviderSubscription(@PathVariable String id) {
+        return subscriptionService.reconcileProviderSubscription(id);
+    }
+
     @PostMapping("/start")
     public StartSubscriptionResponse startSubscription(
             @Valid @RequestBody StartSubscriptionRequest request

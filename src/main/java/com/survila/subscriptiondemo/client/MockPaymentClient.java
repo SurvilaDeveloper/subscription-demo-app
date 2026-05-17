@@ -9,6 +9,7 @@ import com.survila.subscriptiondemo.dto.mock.MockPreapprovalResponse;
 import com.survila.subscriptiondemo.dto.mock.MockSimulateRecurringChargeRequest;
 import com.survila.subscriptiondemo.dto.mock.MockSubscriptionActionRequest;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -20,8 +21,13 @@ public class MockPaymentClient {
     public MockPaymentClient(
             @Value("${demo-app.mock-payment.base-url:http://localhost:9090}") String baseUrl
     ) {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(3000);
+        requestFactory.setReadTimeout(3000);
+
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)
+                .requestFactory(requestFactory)
                 .build();
     }
 
@@ -36,6 +42,17 @@ public class MockPaymentClient {
     public MockPreapprovalResponse getPreapproval(String id) {
         return restClient.get()
                 .uri("/preapproval/{id}", id)
+                .retrieve()
+                .body(MockPreapprovalResponse.class);
+    }
+
+    public MockPreapprovalResponse getPreapprovalByExternalReference(String externalReference) {
+        return restClient.get()
+                .uri(
+                        uriBuilder -> uriBuilder
+                                .path("/preapproval/by-external-reference/{externalReference}")
+                                .build(externalReference)
+                )
                 .retrieve()
                 .body(MockPreapprovalResponse.class);
     }

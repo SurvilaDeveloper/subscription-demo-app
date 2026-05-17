@@ -10,6 +10,40 @@ This project follows a simple semantic versioning style:
 
 ---
 
+## 1.3.0 - 2026-05-17
+
+### Added
+
+- Added a `Ver webhook` action in the StreamBox received webhooks table to inspect the raw webhook payload.
+- Added raw webhook payload capture for received webhooks.
+- Added live UI refresh through server-sent events when StreamBox state changes.
+- Added provider preapproval reconciliation flow using `external_reference`.
+- Added internal subscription states for creation and reconciliation cases.
+- Added friendlier API error mapping for provider failures, webhook failures and validation errors.
+- Added release checklist documentation.
+- Added StreamBox and Mock Payment Service integration contract documentation.
+
+### Changed
+
+- Updated subscription creation so StreamBox only confirms the provider subscription after Mock Payment Service responds successfully.
+- Updated failed or uncertain provider creation attempts to leave the internal subscription in a reconciliation state.
+- Updated UI labels and runtime messages to be more consistent in Spanish.
+- Updated boolean values shown in webhook tables from `true` / `false` to `Sí` / `No`.
+- Updated integration configuration labels in the StreamBox UI.
+- Updated project version to `1.3.0`.
+
+### Fixed
+
+- Improved display of provider and webhook errors so raw JSON, stack traces and low-level HTTP messages are not shown directly in the UI.
+- Improved webhook signature error messages.
+- Improved storage error messages for file-based state.
+
+### Notes
+
+This release focuses on making the demo closer to a real payment integration flow: creation can be uncertain, reconciliation is explicit, webhooks are inspectable and user-facing errors are friendlier.
+
+---
+
 ## 1.2.0 - 2026-05-15
 
 ### Added

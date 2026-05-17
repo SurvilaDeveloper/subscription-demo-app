@@ -468,10 +468,11 @@ mobile app</code></pre>
             <h3>Crear una suscripción</h3>
 
             <pre><code>1. Validar plan interno.
-2. Crear suscripción local en PENDING.
+2. Crear suscripción local en CREATING.
 3. Crear suscripción, preapproval o checkout en el proveedor.
 4. Guardar providerSubscriptionId o providerCheckoutSessionId.
-5. Devolver estado inicial, init_point o datos necesarios al frontend.</code></pre>
+5. Cambiar la suscripción local a PENDING.
+6. Devolver estado inicial, init_point o datos necesarios al frontend.</code></pre>
 
             <h3>Pagar una suscripción existente</h3>
 

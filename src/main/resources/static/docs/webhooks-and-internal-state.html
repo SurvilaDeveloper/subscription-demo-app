@@ -92,10 +92,10 @@ StreamBox Demo
             </p>
 
             <pre><code>1. El usuario elige un plan y presiona Suscribirme.
-2. StreamBox crea una suscripción interna PENDING.
+2. StreamBox crea una suscripción interna CREATING.
 3. StreamBox llama a Mock Payment Service y crea una preapproval.
 4. Mock Payment Service devuelve providerSubscriptionId.
-5. StreamBox guarda providerSubscriptionId.
+5. StreamBox guarda providerSubscriptionId y pasa la suscripción a PENDING.
 6. La suscripción queda lista para pagar.
 7. El usuario selecciona la suscripción y presiona Pagar.
 8. StreamBox simula el pago con tarjeta ficticia.
@@ -251,6 +251,10 @@ x-signature</code></pre>
                 <tr>
                     <td><code>dataId</code></td>
                     <td>ID del recurso externo afectado.</td>
+                </tr>
+                <tr>
+                    <td><code>payload</code></td>
+                    <td>Body recibido desde Mock Payment Service para inspeccionarlo desde la UI.</td>
                 </tr>
                 <tr>
                     <td><code>validSignature</code></td>

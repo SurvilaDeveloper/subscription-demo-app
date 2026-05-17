@@ -294,12 +294,13 @@ PaymentWebhookProcessingService</code></pre>
 
             <pre><code>1. Validar usuario autenticado.
 2. Validar plan elegido.
-3. Crear suscripción interna PENDING.
+3. Crear suscripción interna CREATING.
 4. Crear recurso en el proveedor real.
 5. Guardar providerSubscriptionId o providerCheckoutSessionId.
-6. Devolver URL de checkout, client secret o estado inicial.
-7. Ejecutar el pago como paso separado o redirigir al checkout.
-8. Esperar confirmación por webhook.
+6. Cambiar la suscripción interna a PENDING si el proveedor respondió correctamente.
+7. Devolver URL de checkout, client secret o estado inicial.
+8. Ejecutar el pago como paso separado o redirigir al checkout.
+9. Esperar confirmación por webhook.
 9. Activar internamente solo cuando el proveedor confirme pago válido.</code></pre>
 
             <h3>Importante</h3>

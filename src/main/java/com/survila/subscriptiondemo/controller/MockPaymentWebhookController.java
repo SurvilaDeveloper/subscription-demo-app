@@ -5,6 +5,7 @@ import com.survila.subscriptiondemo.model.DemoReceivedWebhook;
 import com.survila.subscriptiondemo.service.SubscriptionService;
 import com.survila.subscriptiondemo.service.WebhookSignatureVerifier;
 import com.survila.subscriptiondemo.store.DemoStore;
+import com.survila.subscriptiondemo.util.FriendlyErrorMessages;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -37,6 +38,7 @@ public class MockPaymentWebhookController {
         String type = extractType(payload);
         String action = extractAction(payload);
         String dataId = extractDataId(payload);
+        String storedPayload = WebhookPayloadCaptureAdvice.currentPayload();
 
         DemoReceivedWebhook receivedWebhook = null;
 
@@ -54,6 +56,7 @@ public class MockPaymentWebhookController {
                     type,
                     action,
                     dataId,
+                    storedPayload,
                     true,
                     false,
                     null,
@@ -77,13 +80,14 @@ public class MockPaymentWebhookController {
                         type,
                         action,
                         dataId,
+                        storedPayload,
                         false,
                         false,
-                        ex.getMessage(),
+                        FriendlyErrorMessages.webhookProcessingFailure(ex),
                         Instant.now()
                 );
             } else {
-                receivedWebhook.markFailed(ex.getMessage());
+                receivedWebhook.markFailed(FriendlyErrorMessages.webhookProcessingFailure(ex));
             }
 
             store.saveReceivedWebhook(receivedWebhook);

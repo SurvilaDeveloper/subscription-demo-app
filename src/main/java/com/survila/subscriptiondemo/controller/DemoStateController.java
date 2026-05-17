@@ -22,7 +22,7 @@ public class DemoStateController {
     @DeleteMapping
     public DemoStateResponse resetState() {
         store.clearAll();
-        store.addEvent("STATE_RESET", "Demo application state was reset.");
+        store.addEvent("STATE_RESET", "Se reseteó el estado de StreamBox Demo.");
         return currentState();
     }
 

@@ -25,8 +25,10 @@ import com.survila.subscriptiondemo.model.PaymentStatus;
 import com.survila.subscriptiondemo.model.Plan;
 import com.survila.subscriptiondemo.model.SubscriptionStatus;
 import com.survila.subscriptiondemo.store.DemoStore;
+import com.survila.subscriptiondemo.util.FriendlyErrorMessages;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientResponseException;
 
 import java.time.Instant;
 
@@ -55,7 +57,7 @@ public class SubscriptionService {
 
     public StartSubscriptionResponse startSubscription(StartSubscriptionRequest request) {
         Plan plan = planCatalogService.findById(request.planId())
-                .orElseThrow(() -> new BadRequestException("Plan not found: " + request.planId()));
+                .orElseThrow(() -> new BadRequestException("No se encontró el plan " + request.planId() + "."));
 
         Instant now = Instant.now();
 
@@ -67,28 +69,28 @@ public class SubscriptionService {
                 plan.currency(),
                 request.payerEmail(),
                 null,
-                SubscriptionStatus.PENDING,
+                SubscriptionStatus.CREATING,
                 now,
                 now
         );
 
+        subscription.setProviderExternalReference(buildProviderExternalReference(subscription));
         store.saveSubscription(subscription);
         store.addEvent(
                 "SUBSCRIPTION_CREATED",
-                "Internal subscription %s was created for plan %s."
-                        .formatted(subscription.getId(), plan.name())
+                "Se creó la suscripción interna %s para el plan %s con estado %s."
+                        .formatted(subscription.getId(), plan.name(), subscription.getStatus())
         );
 
-        MockPreapprovalResponse preapproval = mockPaymentClient.createPreapproval(
-                buildCreatePreapprovalRequest(subscription)
-        );
+        MockPreapprovalResponse preapproval = createProviderPreapprovalOrMarkFailed(subscription);
 
         subscription.setProviderSubscriptionId(preapproval.id());
+        subscription.setStatus(mapPreapprovalStatus(preapproval.status()));
         store.saveSubscription(subscription);
 
         store.addEvent(
                 "PROVIDER_PREAPPROVAL_CREATED",
-                "Provider preapproval %s was created for internal subscription %s."
+                "Mock Payment Service creó la preapproval %s para la suscripción interna %s."
                         .formatted(preapproval.id(), subscription.getId())
         );
 
@@ -107,13 +109,13 @@ public class SubscriptionService {
 
         store.addEvent(
                 "PAYMENT_RESPONSE_RECEIVED",
-                "Direct payment response received from provider. Provider payment %s has status %s."
+                "StreamBox recibió la respuesta directa del pago. El pago %s del proveedor quedó con estado %s."
                         .formatted(payResponse.payment().id(), payResponse.payment().status())
         );
 
         store.addEvent(
                 "SUBSCRIPTION_STATUS_UPDATED",
-                "Internal subscription %s changed to %s from provider status %s."
+                "La suscripción interna %s cambió a %s según el estado %s informado por el proveedor."
                         .formatted(subscription.getId(), subscription.getStatus(), payResponse.preapprovalStatus())
         );
 
@@ -153,13 +155,13 @@ public class SubscriptionService {
 
         store.addEvent(
                 "RECURRING_CHARGE_SIMULATED",
-                "Recurring charge simulated for internal subscription %s. Provider payment %s has status %s."
+                "Se simuló un cobro recurrente para la suscripción interna %s. El pago %s del proveedor quedó con estado %s."
                         .formatted(subscription.getId(), response.payment().id(), response.payment().status())
         );
 
         store.addEvent(
                 "SUBSCRIPTION_STATUS_UPDATED",
-                "Internal subscription %s changed to %s after recurring charge."
+                "La suscripción interna %s cambió a %s después del cobro recurrente."
                         .formatted(subscription.getId(), subscription.getStatus())
         );
 
@@ -182,7 +184,7 @@ public class SubscriptionService {
         ensureProviderSubscription(subscription);
 
         Plan newPlan = planCatalogService.findById(request.planId())
-                .orElseThrow(() -> new BadRequestException("Plan not found: " + request.planId()));
+                .orElseThrow(() -> new BadRequestException("No se encontró el plan " + request.planId() + "."));
 
         mockPaymentClient.changePlan(
                 subscription.getProviderSubscriptionId(),
@@ -208,13 +210,13 @@ public class SubscriptionService {
 
         store.addEvent(
                 "PLAN_CHANGED",
-                "Internal subscription %s changed to plan %s."
+                "La suscripción interna %s cambió al plan %s."
                         .formatted(subscription.getId(), newPlan.name())
         );
 
         store.addEvent(
                 "SUBSCRIPTION_STATUS_UPDATED",
-                "Internal subscription %s changed to %s after plan change."
+                "La suscripción interna %s cambió a %s después del cambio de plan."
                         .formatted(subscription.getId(), subscription.getStatus())
         );
 
@@ -247,7 +249,7 @@ public class SubscriptionService {
 
         store.addEvent(
                 "SUBSCRIPTION_CANCELLED",
-                "Internal subscription %s was cancelled from StreamBox Demo."
+                "La suscripción interna %s fue cancelada desde StreamBox Demo."
                         .formatted(subscription.getId())
         );
 
@@ -263,7 +265,7 @@ public class SubscriptionService {
 
     public CreateSubscriptionResponse createSubscription(CreateSubscriptionRequest request) {
         Plan plan = planCatalogService.findById(request.planId())
-                .orElseThrow(() -> new BadRequestException("Plan not found: " + request.planId()));
+                .orElseThrow(() -> new BadRequestException("No se encontró el plan " + request.planId() + "."));
 
         Instant now = Instant.now();
 
@@ -275,21 +277,20 @@ public class SubscriptionService {
                 plan.currency(),
                 request.payerEmail(),
                 null,
-                SubscriptionStatus.PENDING,
+                SubscriptionStatus.CREATING,
                 now,
                 now
         );
 
+        subscription.setProviderExternalReference(buildProviderExternalReference(subscription));
         store.saveSubscription(subscription);
         store.addEvent(
                 "SUBSCRIPTION_CREATED",
-                "Internal subscription %s was created for plan %s."
-                        .formatted(subscription.getId(), plan.name())
+                "Se creó la suscripción interna %s para el plan %s con estado %s."
+                        .formatted(subscription.getId(), plan.name(), subscription.getStatus())
         );
 
-        MockPreapprovalResponse preapproval = mockPaymentClient.createPreapproval(
-                buildCreatePreapprovalRequest(subscription)
-        );
+        MockPreapprovalResponse preapproval = createProviderPreapprovalOrMarkFailed(subscription);
 
         subscription.setProviderSubscriptionId(preapproval.id());
         subscription.setStatus(mapPreapprovalStatus(preapproval.status()));
@@ -297,13 +298,13 @@ public class SubscriptionService {
 
         store.addEvent(
                 "PROVIDER_PREAPPROVAL_CREATED",
-                "Provider preapproval %s was created for internal subscription %s."
+                "Mock Payment Service creó la preapproval %s para la suscripción interna %s."
                         .formatted(preapproval.id(), subscription.getId())
         );
 
         store.addEvent(
                 "SUBSCRIPTION_WAITING_FOR_PAYMENT",
-                "Internal subscription %s is waiting for payment."
+                "La suscripción interna %s está esperando el pago inicial."
                         .formatted(subscription.getId())
         );
 
@@ -337,13 +338,13 @@ public class SubscriptionService {
 
         store.addEvent(
                 "PAYMENT_RESPONSE_RECEIVED",
-                "Direct payment response received from provider. Provider payment %s has status %s."
+                "StreamBox recibió la respuesta directa del pago. El pago %s del proveedor quedó con estado %s."
                         .formatted(payResponse.payment().id(), payResponse.payment().status())
         );
 
         store.addEvent(
                 "SUBSCRIPTION_STATUS_UPDATED",
-                "Internal subscription %s changed to %s from provider status %s."
+                "La suscripción interna %s cambió a %s según el estado %s informado por el proveedor."
                         .formatted(subscription.getId(), subscription.getStatus(), payResponse.preapprovalStatus())
         );
 
@@ -357,14 +358,70 @@ public class SubscriptionService {
         );
     }
 
+    public CreateSubscriptionResponse reconcileProviderSubscription(String subscriptionId) {
+        DemoSubscription subscription = getSubscriptionOrThrow(subscriptionId);
+
+        if (subscription.getProviderExternalReference() == null || subscription.getProviderExternalReference().isBlank()) {
+            throw new BadRequestException(
+                    "La suscripción interna %s no tiene referencia externa para reconciliar con Mock Payment Service."
+                            .formatted(subscription.getId())
+            );
+        }
+
+        try {
+            MockPreapprovalResponse preapproval = subscription.getProviderSubscriptionId() == null
+                    ? mockPaymentClient.getPreapprovalByExternalReference(subscription.getProviderExternalReference())
+                    : mockPaymentClient.getPreapproval(subscription.getProviderSubscriptionId());
+
+            subscription.setProviderSubscriptionId(preapproval.id());
+            subscription.setStatus(mapPreapprovalStatus(preapproval.status()));
+            store.saveSubscription(subscription);
+
+            store.addEvent(
+                    "PROVIDER_PREAPPROVAL_RECONCILED",
+                    "La suscripción interna %s fue reconciliada con la preapproval %s del proveedor."
+                            .formatted(subscription.getId(), preapproval.id())
+            );
+
+            return new CreateSubscriptionResponse(
+                    subscription,
+                    preapproval.id(),
+                    preapproval.status()
+            );
+        } catch (RestClientResponseException ex) {
+            if (ex.getStatusCode().value() == 404) {
+                subscription.setStatus(SubscriptionStatus.CREATION_FAILED);
+                store.saveSubscription(subscription);
+
+                store.addEvent(
+                        "PROVIDER_PREAPPROVAL_NOT_FOUND",
+                        "Mock Payment Service no encontró una preapproval para la suscripción interna %s con referencia externa %s."
+                                .formatted(subscription.getId(), subscription.getProviderExternalReference())
+                );
+
+                return new CreateSubscriptionResponse(
+                        subscription,
+                        null,
+                        null
+                );
+            }
+
+            markReconciliationNeeded(subscription, ex);
+            throw ex;
+        } catch (RuntimeException ex) {
+            markReconciliationNeeded(subscription, ex);
+            throw ex;
+        }
+    }
+
     public void processWebhook(MockPaymentWebhookPayload payload) {
         if (payload == null || payload.data() == null || payload.data().id() == null) {
-            throw new BadRequestException("Invalid webhook payload.");
+            throw new BadRequestException("El payload del webhook no es válido.");
         }
 
         store.addEvent(
                 "WEBHOOK_RECEIVED",
-                "Webhook received: type=%s, action=%s, data.id=%s."
+                "StreamBox recibió un webhook: type=%s, action=%s, data.id=%s."
                         .formatted(payload.type(), payload.action(), payload.data().id())
         );
 
@@ -380,7 +437,7 @@ public class SubscriptionService {
 
         store.addEvent(
                 "WEBHOOK_IGNORED",
-                "Webhook ignored: unsupported type/action %s/%s."
+                "StreamBox ignoró el webhook porque no soporta la combinación type/action %s/%s."
                         .formatted(payload.type(), payload.action())
         );
     }
@@ -390,7 +447,8 @@ public class SubscriptionService {
 
         DemoSubscription subscription = store.findSubscriptionByProviderSubscriptionId(providerPayment.preapprovalId())
                 .orElseThrow(() -> new BadRequestException(
-                        "Internal subscription not found for provider subscription: " + providerPayment.preapprovalId()
+                        "StreamBox recibió un webhook para " + providerPayment.preapprovalId()
+                                + ", pero no encontró una suscripción interna vinculada."
                 ));
 
         DemoPayment payment = savePaymentIfMissing(subscription.getId(), providerPayment);
@@ -402,13 +460,13 @@ public class SubscriptionService {
 
         store.addEvent(
                 "WEBHOOK_PAYMENT_PROCESSED",
-                "Webhook payment.created processed. Internal payment %s maps provider payment %s."
+                "Se procesó el webhook payment.created. El pago interno %s corresponde al pago %s del proveedor."
                         .formatted(payment.getId(), providerPayment.id())
         );
 
         store.addEvent(
                 "SUBSCRIPTION_UPDATED_FROM_WEBHOOK",
-                "Internal subscription %s updated to %s after consulting provider preapproval %s."
+                "La suscripción interna %s se actualizó a %s después de consultar la preapproval %s del proveedor."
                         .formatted(subscription.getId(), subscription.getStatus(), providerPreapproval.id())
         );
     }
@@ -418,7 +476,8 @@ public class SubscriptionService {
 
         DemoSubscription subscription = store.findSubscriptionByProviderSubscriptionId(providerPreapproval.id())
                 .orElseThrow(() -> new BadRequestException(
-                        "Internal subscription not found for provider subscription: " + providerPreapproval.id()
+                        "StreamBox recibió un webhook para " + providerPreapproval.id()
+                                + ", pero no encontró una suscripción interna vinculada."
                 ));
 
         subscription.setStatus(mapPreapprovalStatus(providerPreapproval.status()));
@@ -426,7 +485,7 @@ public class SubscriptionService {
 
         store.addEvent(
                 "WEBHOOK_PREAPPROVAL_PROCESSED",
-                "Webhook %s processed. Internal subscription %s updated to %s."
+                "Se procesó el webhook %s. La suscripción interna %s se actualizó a %s."
                         .formatted(action, subscription.getId(), subscription.getStatus())
         );
     }
@@ -449,7 +508,7 @@ public class SubscriptionService {
 
                     store.addEvent(
                             "PAYMENT_CREATED",
-                            "Internal payment %s was created from provider payment %s with status %s."
+                            "Se creó el pago interno %s a partir del pago %s del proveedor con estado %s."
                                     .formatted(payment.getId(), payment.getProviderPaymentId(), payment.getStatus())
                     );
 
@@ -460,7 +519,7 @@ public class SubscriptionService {
     private MockCreatePreapprovalRequest buildCreatePreapprovalRequest(DemoSubscription subscription) {
         return new MockCreatePreapprovalRequest(
                 subscription.getPlanName(),
-                "demo_subscription_id=" + subscription.getId(),
+                subscription.getProviderExternalReference(),
                 subscription.getPayerEmail(),
                 new MockCreatePreapprovalRequest.AutoRecurringRequest(
                         1,
@@ -470,6 +529,32 @@ public class SubscriptionService {
                 ),
                 publicBaseUrl,
                 webhookBaseUrl + "/api/webhooks/mock-payment"
+        );
+    }
+
+    private String buildProviderExternalReference(DemoSubscription subscription) {
+        return "demo_subscription_id=" + subscription.getId();
+    }
+
+    private MockPreapprovalResponse createProviderPreapprovalOrMarkFailed(DemoSubscription subscription) {
+        try {
+            return mockPaymentClient.createPreapproval(
+                    buildCreatePreapprovalRequest(subscription)
+            );
+        } catch (RuntimeException ex) {
+            markReconciliationNeeded(subscription, ex);
+            throw ex;
+        }
+    }
+
+    private void markReconciliationNeeded(DemoSubscription subscription, RuntimeException ex) {
+        subscription.setStatus(SubscriptionStatus.RECONCILIATION_NEEDED);
+        store.saveSubscription(subscription);
+
+        store.addEvent(
+                "PROVIDER_PREAPPROVAL_RECONCILIATION_NEEDED",
+                "No se pudo confirmar en Mock Payment Service la creación de la suscripción interna %s. %s"
+                        .formatted(subscription.getId(), FriendlyErrorMessages.providerCreationFailure(ex))
         );
     }
 
@@ -486,14 +571,14 @@ public class SubscriptionService {
 
     private DemoSubscription getSubscriptionOrThrow(String subscriptionId) {
         return store.findSubscriptionById(subscriptionId)
-                .orElseThrow(() -> new BadRequestException("Internal subscription not found: " + subscriptionId));
+                .orElseThrow(() -> new BadRequestException("No se encontró la suscripción interna " + subscriptionId + "."));
     }
 
     private void ensureProviderSubscription(DemoSubscription subscription) {
         if (subscription.getProviderSubscriptionId() == null || subscription.getProviderSubscriptionId().isBlank()) {
             throw new BadRequestException(
-                    "Internal subscription %s does not have provider subscription id."
-                            .formatted(subscription.getId())
+                    "La suscripción interna %s todavía no está vinculada con Mock Payment Service. Estado actual: %s."
+                            .formatted(subscription.getId(), subscription.getStatus())
             );
         }
     }

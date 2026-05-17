@@ -15,6 +15,7 @@ public class DemoSubscription implements Serializable {
     private String currency;
     private final String payerEmail;
 
+    private String providerExternalReference;
     private String providerSubscriptionId;
     private SubscriptionStatus status;
     private Instant createdAt;
@@ -66,6 +67,15 @@ public class DemoSubscription implements Serializable {
 
     public String getPayerEmail() {
         return payerEmail;
+    }
+
+    public String getProviderExternalReference() {
+        return providerExternalReference;
+    }
+
+    public void setProviderExternalReference(String providerExternalReference) {
+        this.providerExternalReference = providerExternalReference;
+        this.updatedAt = Instant.now();
     }
 
     public String getProviderSubscriptionId() {

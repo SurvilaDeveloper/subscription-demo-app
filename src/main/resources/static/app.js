@@ -1,12 +1,16 @@
 const endpoints = {
     info: "/api/demo/info",
     state: "/api/demo/state",
+    stateStream: "/api/demo/state/stream",
     plans: "/api/plans",
     subscriptions: "/api/demo/subscriptions",
     payments: "/api/demo/payments",
     events: "/api/demo/events",
     webhooks: "/api/demo/webhooks",
     createSubscription: "/api/subscriptions",
+
+    reconcileSubscription: (subscriptionId) =>
+        `/api/subscriptions/${encodeURIComponent(subscriptionId)}/reconcile-provider`,
 
     paySubscription: (subscriptionId) =>
         `/api/subscriptions/${encodeURIComponent(subscriptionId)}/pay`,
@@ -29,6 +33,11 @@ const elements = {
     helpCloseButton: document.querySelector("#helpCloseButton"),
     helpNav: document.querySelector("#helpNav"),
     helpContent: document.querySelector("#helpContent"),
+    webhookModalBackdrop: document.querySelector("#webhookModalBackdrop"),
+    webhookCloseButton: document.querySelector("#webhookCloseButton"),
+    webhookModalTitle: document.querySelector("#webhookModalTitle"),
+    webhookModalSubtitle: document.querySelector("#webhookModalSubtitle"),
+    webhookPayloadBox: document.querySelector("#webhookPayloadBox"),
     messageBox: document.querySelector("#messageBox"),
 
     integrationGrid: document.querySelector("#integrationGrid"),
@@ -66,6 +75,9 @@ const elements = {
     receivedWebhooksCount: document.querySelector("#receivedWebhooksCount"),
     receivedWebhooksTable: document.querySelector("#receivedWebhooksTable"),
 };
+
+let receivedWebhooksById = new Map();
+let autoRefreshTimeoutId;
 
 const helpDocs = [
     {
@@ -114,10 +126,10 @@ const helpDocs = [
 
         <ol>
             <li>El usuario elige un plan en StreamBox.</li>
-            <li>StreamBox crea una suscripción interna en estado <code>PENDING</code>.</li>
+            <li>StreamBox crea una suscripción interna en estado <code>CREATING</code>.</li>
             <li>StreamBox llama a <code>POST /preapproval</code> en Mock Payment Service.</li>
             <li>Mock Payment Service devuelve un <code>provider_subscription_id</code>.</li>
-            <li>StreamBox guarda ese ID externo en su estado interno.</li>
+            <li>StreamBox guarda ese ID externo y pasa la suscripción interna a <code>PENDING</code>.</li>
             <li>La suscripción queda lista para pagar.</li>
         </ol>
 
@@ -135,11 +147,11 @@ const helpDocs = [
 
         <pre><code>Suscribirme
   ↓
-StreamBox crea suscripción interna PENDING
+StreamBox crea suscripción interna CREATING
   ↓
 Mock Payment Service crea preapproval
   ↓
-StreamBox guarda providerSubscriptionId
+StreamBox guarda providerSubscriptionId y pasa a PENDING
 
 Pagar
   ↓
@@ -245,7 +257,7 @@ payment.status = IN_PROCESS</code></pre>
             </ul>
 
             <div class="help-callout">
-                En Mock Payment Studio el webhook puede verse como <code>delivered=true</code> y <code>received internally=false</code>.
+                En Mock Payment Studio el webhook puede verse como <code>Entregado = Sí</code> y <code>Recibido interno = No</code>.
                 Eso es correcto cuando el webhook fue entregado a StreamBox y no al receptor interno del mock.
             </div>
         `,
@@ -341,6 +353,11 @@ http://subscription-demo-app:8080/api/webhooks/mock-payment</code></pre>
 
         <p>
             Muestra el estado que guarda StreamBox, no solo el estado del proveedor.
+        </p>
+
+        <p>
+            Si la creación en el proveedor queda sin confirmar, la suscripción aparece como
+            <code>RECONCILIATION_NEEDED</code> y puede reconciliarse por su referencia externa.
         </p>
 
         <h4>Pagos internos</h4>
@@ -518,7 +535,8 @@ function statusClass(status) {
 
     if (
         normalized.includes("active") ||
-        normalized.includes("approved")
+        normalized.includes("approved") ||
+        normalized === "sí"
     ) {
         return "status-success";
     }
@@ -526,7 +544,9 @@ function statusClass(status) {
     if (
         normalized.includes("pending") ||
         normalized.includes("process") ||
-        normalized.includes("paused")
+        normalized.includes("paused") ||
+        normalized.includes("creating") ||
+        normalized.includes("reconciliation")
     ) {
         return "status-warning";
     }
@@ -534,7 +554,8 @@ function statusClass(status) {
     if (
         normalized.includes("failed") ||
         normalized.includes("rejected") ||
-        normalized.includes("cancelled")
+        normalized.includes("cancelled") ||
+        normalized === "no"
     ) {
         return "status-danger";
     }
@@ -544,6 +565,22 @@ function statusClass(status) {
 
 function badge(value) {
     return `<span class="status ${statusClass(value)}">${escapeHtml(value)}</span>`;
+}
+
+function formatBoolean(value) {
+    return value ? "Sí" : "No";
+}
+
+function formatJsonBlock(value) {
+    if (!value) {
+        return "No hay payload disponible para este webhook.";
+    }
+
+    try {
+        return JSON.stringify(JSON.parse(value), null, 2);
+    } catch {
+        return value;
+    }
 }
 
 function showMessage(message, type = "info") {
@@ -573,7 +610,7 @@ async function requestJson(url, options = {}) {
     const text = await response.text();
 
     if (!response.ok) {
-        throw new Error(text || `HTTP ${response.status}`);
+        throw buildRequestError(response, text);
     }
 
     if (!text) {
@@ -581,6 +618,150 @@ async function requestJson(url, options = {}) {
     }
 
     return JSON.parse(text);
+}
+
+function buildRequestError(response, text) {
+    const error = new Error(formatRequestError(response, text));
+    error.status = response.status;
+    error.rawBody = text;
+    return error;
+}
+
+function formatRequestError(response, text) {
+    const payload = parseJson(text);
+    const details = extractErrorDetails(payload, text);
+    const friendlyDetails = details
+        .map(humanizeErrorDetail)
+        .filter(Boolean);
+
+    if (friendlyDetails.length) {
+        return friendlyDetails.join(" ");
+    }
+
+    if (response.status === 404) {
+        return "No se encontró el recurso solicitado.";
+    }
+
+    if (response.status === 400) {
+        return "La solicitud tiene datos inválidos o incompletos.";
+    }
+
+    if (response.status >= 500) {
+        return "Ocurrió un error interno. Revisá que las dos aplicaciones estén levantadas y configuradas.";
+    }
+
+    return `La operación falló con estado HTTP ${response.status}.`;
+}
+
+function parseJson(value) {
+    if (!value) {
+        return null;
+    }
+
+    try {
+        return JSON.parse(value);
+    } catch {
+        return null;
+    }
+}
+
+function extractErrorDetails(payload, text) {
+    if (payload) {
+        if (Array.isArray(payload.details) && payload.details.length) {
+            return payload.details;
+        }
+
+        if (payload.message) {
+            return [payload.message];
+        }
+
+        if (payload.error && !isGenericErrorLabel(payload.error)) {
+            return [payload.error];
+        }
+    }
+
+    return text ? [text] : [];
+}
+
+function isGenericErrorLabel(label) {
+    return [
+        "Bad Request",
+        "Internal Server Error",
+        "Not Found",
+        "Solicitud inválida",
+        "Error interno",
+        "No encontrado",
+    ].includes(label);
+}
+
+function humanizeErrorDetail(detail) {
+    const text = stripJavaExceptionPrefix(String(detail ?? "").trim());
+
+    if (!text) {
+        return "";
+    }
+
+    if (text.startsWith("<")) {
+        return "";
+    }
+
+    const embeddedPayload = parseEmbeddedJson(text);
+
+    if (embeddedPayload) {
+        return extractErrorDetails(embeddedPayload, "")
+            .map(humanizeErrorDetail)
+            .filter(Boolean)
+            .join(" ");
+    }
+
+    const normalized = text.toLowerCase();
+
+    if (
+        normalized.includes("connection refused") ||
+        normalized.includes("i/o error") ||
+        normalized.includes("connect timed out") ||
+        normalized.includes("read timed out")
+    ) {
+        return "No se pudo conectar con Mock Payment Service. Verificá que esté levantado y que el puerto configurado sea correcto.";
+    }
+
+    if (normalized.includes("simulated response failure after creating preapproval")) {
+        return "Mock Payment Service creó la suscripción, pero simuló una pérdida de respuesta. Usá Reconciliar para confirmar el estado.";
+    }
+
+    if (normalized.includes("preapproval not found")) {
+        return "Mock Payment Service no encontró la suscripción solicitada.";
+    }
+
+    if (normalized.includes("plan not found")) {
+        return "No se encontró el plan seleccionado.";
+    }
+
+    if (normalized.includes("internal subscription not found")) {
+        return "No se encontró la suscripción interna relacionada con esa operación.";
+    }
+
+    if (normalized.includes("does not have a provider subscription id")) {
+        return "La suscripción todavía no está vinculada con una suscripción del proveedor. Primero reconciliá o recreá la suscripción.";
+    }
+
+    return text;
+}
+
+function stripJavaExceptionPrefix(text) {
+    return text.replace(/^(?:[a-zA-Z_$][\w$]*\.)+[A-Za-z_$][\w$]*(?:Exception|Error)?:\s*/, "");
+}
+
+function parseEmbeddedJson(text) {
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+
+    if (start === -1 || end <= start) {
+        return null;
+    }
+
+    const embeddedJson = text.slice(start, end + 1);
+    return parseJson(embeddedJson) ?? parseJson(embeddedJson.replaceAll('\\"', '"'));
 }
 
 async function loadDashboard(options = {}) {
@@ -635,6 +816,23 @@ function setLoading(loading) {
     elements.refreshButton.textContent = loading ? "Cargando..." : "Refrescar";
 }
 
+function scheduleAutoRefresh() {
+    window.clearTimeout(autoRefreshTimeoutId);
+    autoRefreshTimeoutId = window.setTimeout(() => {
+        loadDashboard({ silent: true });
+    }, 300);
+}
+
+function connectLiveUpdates() {
+    if (!window.EventSource) {
+        return;
+    }
+
+    const source = new EventSource(endpoints.stateStream);
+    source.addEventListener("state-changed", scheduleAutoRefresh);
+    window.addEventListener("beforeunload", () => source.close());
+}
+
 function renderState(state) {
     const items = [
         ["Suscripciones", state?.subscriptions_count ?? 0],
@@ -657,11 +855,11 @@ function renderState(state) {
 function renderIntegrationInfo(info) {
     const items = [
         ["App", info?.name ?? "-"],
-        ["Mock Payment Base URL", info?.mock_payment_base_url ?? "-"],
-        ["Public Base URL", info?.public_base_url ?? "-"],
-        ["Webhook Base URL", info?.webhook_base_url ?? "-"],
-        ["Webhook Path", info?.webhook_path ?? "-"],
-        ["Webhook URL", info?.webhook_url ?? "-"],
+        ["URL base de Mock Payment", info?.mock_payment_base_url ?? "-"],
+        ["URL pública de StreamBox", info?.public_base_url ?? "-"],
+        ["URL base de webhooks", info?.webhook_base_url ?? "-"],
+        ["Ruta de webhook", info?.webhook_path ?? "-"],
+        ["URL completa de webhook", info?.webhook_url ?? "-"],
     ];
 
     elements.integrationGrid.innerHTML = items
@@ -700,7 +898,7 @@ function renderSubscriptions(subscriptions) {
     elements.subscriptionsCount.textContent = subscriptions.length;
 
     if (!subscriptions.length) {
-        elements.subscriptionsTable.innerHTML = tableEmptyRow(6, "Todavía no hay suscripciones internas.");
+        elements.subscriptionsTable.innerHTML = tableEmptyRow(8, "Todavía no hay suscripciones internas.");
         return;
     }
 
@@ -714,12 +912,30 @@ function renderSubscriptions(subscriptions) {
                     <span class="mono">${escapeHtml(subscription.planId)}</span>
                 </td>
                 <td>${escapeHtml(subscription.payerEmail)}</td>
+                <td class="mono">${escapeHtml(subscription.providerExternalReference ?? "-")}</td>
                 <td class="mono">${escapeHtml(subscription.providerSubscriptionId ?? "-")}</td>
                 <td>${badge(subscription.status)}</td>
                 <td>${escapeHtml(formatDate(subscription.updatedAt))}</td>
+                <td>${renderSubscriptionAction(subscription)}</td>
             </tr>
         `)
         .join("");
+}
+
+function renderSubscriptionAction(subscription) {
+    const needsReconciliation =
+        !subscription.providerSubscriptionId ||
+        subscription.status === "RECONCILIATION_NEEDED";
+
+    if (!needsReconciliation) {
+        return escapeHtml("-");
+    }
+
+    return `
+        <button class="button button-secondary button-small" type="button" data-reconcile-subscription-id="${escapeHtml(subscription.id)}">
+            Reconciliar
+        </button>
+    `;
 }
 
 function renderPayments(payments) {
@@ -746,9 +962,10 @@ function renderPayments(payments) {
 
 function renderReceivedWebhooks(webhooks) {
     elements.receivedWebhooksCount.textContent = webhooks.length;
+    receivedWebhooksById = new Map(webhooks.map((webhook) => [webhook.id, webhook]));
 
     if (!webhooks.length) {
-        elements.receivedWebhooksTable.innerHTML = tableEmptyRow(8, "Todavía no hay webhooks recibidos por StreamBox.");
+        elements.receivedWebhooksTable.innerHTML = tableEmptyRow(9, "Todavía no hay webhooks recibidos por StreamBox.");
         return;
     }
 
@@ -770,8 +987,8 @@ function renderReceivedWebhooks(webhooks) {
                         </div>
                     </td>
                     <td class="mono">${escapeHtml(webhook.dataId ?? "-")}</td>
-                    <td>${badge(String(webhook.validSignature))}</td>
-                    <td>${badge(String(webhook.processed))}</td>
+                    <td>${badge(formatBoolean(webhook.validSignature))}</td>
+                    <td>${badge(formatBoolean(webhook.processed))}</td>
                     <td>
                         ${
                 webhook.error
@@ -780,6 +997,11 @@ function renderReceivedWebhooks(webhooks) {
             }
                     </td>
                     <td>${escapeHtml(formatDate(webhook.receivedAt))}</td>
+                    <td>
+                        <button class="button button-secondary button-small" type="button" data-webhook-id="${escapeHtml(webhook.id)}">
+                            Ver webhook
+                        </button>
+                    </td>
                 </tr>
             `;
         })
@@ -838,6 +1060,7 @@ async function createSubscription(event) {
     } catch (error) {
         console.error(error);
         showMessage(`No se pudo crear la suscripción: ${error.message}`, "error");
+        await loadDashboard({ silent: true });
     }
 }
 
@@ -1041,6 +1264,10 @@ function renderActionPlanSelect(plans) {
 }
 
 function renderActionSubscriptionSelects(subscriptions) {
+    const providerSubscriptions = subscriptions.filter((subscription) =>
+        Boolean(subscription.providerSubscriptionId)
+    );
+
     const selects = [
         elements.paymentSubscriptionSelect,
         elements.recurringSubscriptionSelect,
@@ -1051,12 +1278,12 @@ function renderActionSubscriptionSelects(subscriptions) {
     for (const select of selects) {
         const previousValue = select.value;
 
-        if (!subscriptions.length) {
-            select.innerHTML = `<option value="">Sin suscripciones</option>`;
+        if (!providerSubscriptions.length) {
+            select.innerHTML = `<option value="">Sin suscripciones listas</option>`;
             continue;
         }
 
-        select.innerHTML = subscriptions
+        select.innerHTML = providerSubscriptions
             .map((subscription) => `
                 <option value="${escapeHtml(subscription.id)}">
                     ${escapeHtml(subscription.id)} · ${escapeHtml(subscription.planName)} · ${escapeHtml(subscription.status)}
@@ -1064,7 +1291,7 @@ function renderActionSubscriptionSelects(subscriptions) {
             `)
             .join("");
 
-        const exists = subscriptions.some((subscription) => subscription.id === previousValue);
+        const exists = providerSubscriptions.some((subscription) => subscription.id === previousValue);
 
         if (exists) {
             select.value = previousValue;
@@ -1102,8 +1329,42 @@ function closeHelpModal() {
     document.body.classList.remove("modal-open");
 }
 
+async function reconcileSubscription(subscriptionId) {
+    try {
+        const response = await requestJson(endpoints.reconcileSubscription(subscriptionId), {
+            method: "POST",
+        });
+
+        showMessage(
+            `Reconciliación terminada. Suscripción ${response.subscription.id}: ${response.subscription.status}.`
+        );
+
+        await loadDashboard({ silent: true });
+    } catch (error) {
+        console.error(error);
+        showMessage(`No se pudo reconciliar la suscripción: ${error.message}`, "error");
+        await loadDashboard({ silent: true });
+    }
+}
+
+function openWebhookModal(webhook) {
+    const eventLabel = webhook.action ?? webhook.type ?? webhook.id;
+
+    elements.webhookModalTitle.textContent = `Webhook ${webhook.id}`;
+    elements.webhookModalSubtitle.textContent = `${eventLabel} - ${formatDate(webhook.receivedAt)}`;
+    elements.webhookPayloadBox.textContent = formatJsonBlock(webhook.payload);
+    elements.webhookModalBackdrop.classList.remove("hidden");
+    document.body.classList.add("modal-open");
+}
+
+function closeWebhookModal() {
+    elements.webhookModalBackdrop.classList.add("hidden");
+    document.body.classList.remove("modal-open");
+}
+
 elements.helpButton.addEventListener("click", () => openHelpModal());
 elements.helpCloseButton.addEventListener("click", closeHelpModal);
+elements.webhookCloseButton.addEventListener("click", closeWebhookModal);
 
 elements.helpModalBackdrop.addEventListener("click", (event) => {
     if (event.target === elements.helpModalBackdrop) {
@@ -1111,7 +1372,32 @@ elements.helpModalBackdrop.addEventListener("click", (event) => {
     }
 });
 
+elements.webhookModalBackdrop.addEventListener("click", (event) => {
+    if (event.target === elements.webhookModalBackdrop) {
+        closeWebhookModal();
+    }
+});
+
 document.addEventListener("click", (event) => {
+    const reconcileButton = event.target.closest("[data-reconcile-subscription-id]");
+
+    if (reconcileButton) {
+        reconcileSubscription(reconcileButton.dataset.reconcileSubscriptionId);
+        return;
+    }
+
+    const webhookButton = event.target.closest("[data-webhook-id]");
+
+    if (webhookButton) {
+        const webhook = receivedWebhooksById.get(webhookButton.dataset.webhookId);
+
+        if (webhook) {
+            openWebhookModal(webhook);
+        }
+
+        return;
+    }
+
     const helpDocButton = event.target.closest("[data-help-doc]");
 
     if (helpDocButton) {
@@ -1124,7 +1410,9 @@ document.addEventListener("keydown", (event) => {
         return;
     }
 
-    if (!elements.helpModalBackdrop.classList.contains("hidden")) {
+    if (!elements.webhookModalBackdrop.classList.contains("hidden")) {
+        closeWebhookModal();
+    } else if (!elements.helpModalBackdrop.classList.contains("hidden")) {
         closeHelpModal();
     }
 });
@@ -1138,4 +1426,5 @@ elements.cancelSubscriptionForm.addEventListener("submit", cancelSubscription);
 elements.refreshButton.addEventListener("click", () => loadDashboard());
 elements.resetButton.addEventListener("click", resetState);
 
+connectLiveUpdates();
 loadDashboard();

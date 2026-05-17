@@ -444,7 +444,7 @@ auditar problemas de pago
 saber por qué una suscripción no cambió de estado
 ```
 
-En StreamBox Demo no se guarda el payload completo, pero en producción podría ser conveniente guardar el payload raw con cuidado.
+StreamBox Demo guarda el payload completo para poder inspeccionarlo desde la UI. En producción conviene guardar ese payload raw con cuidado, evitando exponer datos sensibles innecesarios.
 
 ---
 
@@ -619,10 +619,11 @@ billing/
 
 ```txt
 1. Validar plan interno.
-2. Crear suscripción local en PENDING.
+2. Crear suscripción local en CREATING.
 3. Llamar al proveedor.
 4. Guardar providerSubscriptionId.
-5. Devolver init_point o estado inicial al frontend.
+5. Cambiar la suscripción local a PENDING.
+6. Devolver init_point o estado inicial al frontend.
 ```
 
 ## Recibir webhook

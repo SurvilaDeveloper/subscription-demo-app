@@ -258,9 +258,11 @@
                         <th>ID interno</th>
                         <th>Plan</th>
                         <th>Email</th>
+                        <th>External reference</th>
                         <th>Provider subscription ID</th>
                         <th>Estado</th>
                         <th>Actualizado</th>
+                        <th>Acción</th>
                     </tr>
                     </thead>
                     <tbody id="subscriptionsTable"></tbody>
@@ -315,6 +317,7 @@
                         <th>Procesado</th>
                         <th>Error</th>
                         <th>Recibido</th>
+                        <th>Webhook</th>
                     </tr>
                     </thead>
                     <tbody id="receivedWebhooksTable"></tbody>
@@ -368,6 +371,23 @@
             <nav id="helpNav" class="help-nav" aria-label="Secciones de ayuda"></nav>
             <article id="helpContent" class="help-content"></article>
         </div>
+    </section>
+</div>
+
+<div id="webhookModalBackdrop" class="modal-backdrop hidden">
+    <section class="webhook-modal" role="dialog" aria-modal="true" aria-labelledby="webhookModalTitle">
+        <header class="webhook-modal-header">
+            <div>
+                <h2 id="webhookModalTitle">Webhook recibido</h2>
+                <p id="webhookModalSubtitle"></p>
+            </div>
+
+            <button id="webhookCloseButton" class="button button-secondary" type="button">
+                Cerrar
+            </button>
+        </header>
+
+        <pre id="webhookPayloadBox" class="webhook-payload"></pre>
     </section>
 </div>
 

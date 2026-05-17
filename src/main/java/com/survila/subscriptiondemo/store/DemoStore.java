@@ -4,6 +4,7 @@ import com.survila.subscriptiondemo.model.DemoEvent;
 import com.survila.subscriptiondemo.model.DemoPayment;
 import com.survila.subscriptiondemo.model.DemoReceivedWebhook;
 import com.survila.subscriptiondemo.model.DemoSubscription;
+import com.survila.subscriptiondemo.service.DemoStateChangeBroadcaster;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -37,13 +38,16 @@ public class DemoStore {
     private final AtomicLong eventSequence = new AtomicLong(1);
     private final AtomicLong receivedWebhookSequence = new AtomicLong(1);
 
+    private final DemoStateChangeBroadcaster stateChangeBroadcaster;
     private final String storageType;
     private final Path stateFilePath;
 
     public DemoStore(
+            DemoStateChangeBroadcaster stateChangeBroadcaster,
             @Value("${demo-app.storage.type:memory}") String storageType,
             @Value("${demo-app.storage.file-path:./data/subscription-demo-state.bin}") String stateFilePath
     ) {
+        this.stateChangeBroadcaster = stateChangeBroadcaster;
         this.storageType = normalizeStorageType(storageType);
         this.stateFilePath = Path.of(stateFilePath);
 
@@ -69,6 +73,7 @@ public class DemoStore {
     public synchronized DemoSubscription saveSubscription(DemoSubscription subscription) {
         subscriptions.put(subscription.getId(), subscription);
         persistIfNeeded();
+        stateChangeBroadcaster.publish("subscription-saved");
         return subscription;
     }
 
@@ -83,6 +88,13 @@ public class DemoStore {
                 .findFirst();
     }
 
+    public Optional<DemoSubscription> findSubscriptionByProviderExternalReference(String providerExternalReference) {
+        return subscriptions.values()
+                .stream()
+                .filter(subscription -> providerExternalReference.equals(subscription.getProviderExternalReference()))
+                .findFirst();
+    }
+
     public List<DemoSubscription> findAllSubscriptions() {
         return subscriptions.values()
                 .stream()
@@ -93,6 +105,7 @@ public class DemoStore {
     public synchronized DemoPayment savePayment(DemoPayment payment) {
         payments.put(payment.getId(), payment);
         persistIfNeeded();
+        stateChangeBroadcaster.publish("payment-saved");
         return payment;
     }
 
@@ -120,6 +133,7 @@ public class DemoStore {
 
         events.add(event);
         persistIfNeeded();
+        stateChangeBroadcaster.publish("event-added");
 
         return event;
     }
@@ -135,12 +149,14 @@ public class DemoStore {
             if (current.getId().equals(webhook.getId())) {
                 receivedWebhooks.set(i, webhook);
                 persistIfNeeded();
+                stateChangeBroadcaster.publish("webhook-saved");
                 return webhook;
             }
         }
 
         receivedWebhooks.add(webhook);
         persistIfNeeded();
+        stateChangeBroadcaster.publish("webhook-saved");
 
         return webhook;
     }
@@ -179,6 +195,7 @@ public class DemoStore {
         receivedWebhookSequence.set(1);
 
         persistIfNeeded();
+        stateChangeBroadcaster.publish("state-cleared");
     }
 
     public String getStorageType() {
@@ -194,7 +211,7 @@ public class DemoStore {
 
         if (!normalized.equals(STORAGE_TYPE_MEMORY) && !normalized.equals(STORAGE_TYPE_FILE)) {
             throw new IllegalArgumentException(
-                    "Invalid demo-app.storage.type: %s. Supported values: memory, file.".formatted(value)
+                    "El valor demo-app.storage.type=%s no es válido. Valores soportados: memory, file.".formatted(value)
             );
         }
 
@@ -221,7 +238,7 @@ public class DemoStore {
             Object object = objectInputStream.readObject();
 
             if (!(object instanceof DemoStoreSnapshot snapshot)) {
-                throw new IllegalStateException("Invalid demo state file content.");
+                throw new IllegalStateException("El archivo de estado de StreamBox no tiene un contenido válido.");
             }
 
             subscriptions.clear();
@@ -262,7 +279,7 @@ public class DemoStore {
             receivedWebhookSequence.set(Math.max(1, snapshot.nextReceivedWebhookSequence()));
         } catch (Exception ex) {
             throw new IllegalStateException(
-                    "Could not load demo state file: %s. Delete the file if it is corrupted or incompatible."
+                    "No se pudo cargar el archivo de estado de StreamBox: %s. Borrá el archivo si quedó corrupto o es incompatible."
                             .formatted(stateFilePath),
                     ex
             );
@@ -300,7 +317,7 @@ public class DemoStore {
             }
         } catch (Exception ex) {
             throw new IllegalStateException(
-                    "Could not persist demo state file: %s".formatted(stateFilePath),
+                    "No se pudo guardar el archivo de estado de StreamBox: %s".formatted(stateFilePath),
                     ex
             );
         }

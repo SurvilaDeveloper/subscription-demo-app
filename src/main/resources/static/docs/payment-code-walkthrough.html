@@ -260,7 +260,7 @@ public class SubscriptionService {
             plan.currency(),
             request.payerEmail(),
             null,
-            SubscriptionStatus.PENDING,
+            SubscriptionStatus.CREATING,
             now,
             now
     );
@@ -587,6 +587,7 @@ receivedWebhook = new DemoReceivedWebhook(
         type,
         action,
         dataId,
+        rawPayload,
         true,
         false,
         null,
@@ -850,6 +851,7 @@ Actualizar estado interno</code></pre>
     private final String type;
     private final String action;
     private final String dataId;
+    private final String payload;
     private final boolean validSignature;
     private boolean processed;
     private String error;

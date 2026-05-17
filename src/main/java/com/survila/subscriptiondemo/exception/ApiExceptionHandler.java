@@ -1,5 +1,6 @@
 package com.survila.subscriptiondemo.exception;
 
+import com.survila.subscriptiondemo.util.FriendlyErrorMessages;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -17,8 +18,8 @@ public class ApiExceptionHandler {
         return new ErrorResponse(
                 Instant.now(),
                 400,
-                "Bad Request",
-                List.of(ex.getMessage())
+                "Solicitud inválida",
+                List.of(FriendlyErrorMessages.apiDetail(ex))
         );
     }
 
@@ -28,13 +29,13 @@ public class ApiExceptionHandler {
         List<String> details = ex.getBindingResult()
                 .getFieldErrors()
                 .stream()
-                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .map(error -> error.getField() + ": " + translateValidationMessage(error.getDefaultMessage()))
                 .toList();
 
         return new ErrorResponse(
                 Instant.now(),
                 400,
-                "Bad Request",
+                "Solicitud inválida",
                 details
         );
     }
@@ -45,8 +46,8 @@ public class ApiExceptionHandler {
         return new ErrorResponse(
                 Instant.now(),
                 400,
-                "Bad Request",
-                List.of(ex.getMessage())
+                "Solicitud inválida",
+                List.of(FriendlyErrorMessages.apiDetail(ex))
         );
     }
 
@@ -56,8 +57,8 @@ public class ApiExceptionHandler {
         return new ErrorResponse(
                 Instant.now(),
                 500,
-                "Internal Server Error",
-                List.of(ex.getMessage())
+                "Error interno",
+                List.of(FriendlyErrorMessages.apiDetail(ex))
         );
     }
 
@@ -67,5 +68,17 @@ public class ApiExceptionHandler {
             String error,
             List<String> details
     ) {
+    }
+
+    private String translateValidationMessage(String message) {
+        if (message == null || message.isBlank()) {
+            return "tiene un valor inválido";
+        }
+
+        return switch (message) {
+            case "must not be blank", "must not be empty", "must not be null" -> "es obligatorio";
+            case "must be a well-formed email address" -> "debe ser un email válido";
+            default -> message;
+        };
     }
 }

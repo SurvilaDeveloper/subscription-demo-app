@@ -14,11 +14,11 @@ mock-payment-service
 
 ## Disclaimer
 
-This project is not affiliated with Mercado Pago, Stripe, PayPal, or any real payment provider.
+Este proyecto no está afiliado a Mercado Pago, Stripe, PayPal ni a ninguna pasarela de pago real.
 
-It is a local demo application for development and learning purposes only.
+Es una aplicación demo local para desarrollo y aprendizaje.
 
-It does not process real payments, real cards, or real subscriptions.
+No procesa pagos reales, tarjetas reales ni suscripciones reales.
 
 ---
 
@@ -591,11 +591,15 @@ provider_subscription_id = mock-preapproval-...
 La app internamente hace:
 
 ```txt
-1. Crea una suscripción interna PENDING.
+1. Crea una suscripción interna CREATING.
 2. Llama a POST /preapproval en mock-payment-service.
 3. Guarda el provider_subscription_id.
-4. Deja la suscripción lista para pagar.
+4. Cambia la suscripción interna a PENDING y la deja lista para pagar.
 ```
+
+Si la llamada al mock falla o se pierde la respuesta, StreamBox conserva la suscripción con
+`RECONCILIATION_NEEDED`. En ese caso se puede usar la acción `Reconciliar` para buscar la preapproval
+por `external_reference` cuando el mock vuelva a estar disponible.
 
 ---
 
@@ -841,6 +845,7 @@ Columnas:
 | Procesado | Si StreamBox pudo aplicar la lógica interna |
 | Error | Error si el procesamiento falló |
 | Recibido | Fecha de recepción |
+| Webhook | Botón para abrir el payload recibido |
 
 ---
 
@@ -1300,6 +1305,8 @@ http://localhost:8085/docs/
 | `/docs/legal-responsibilities.html` | Responsabilidades legales, privacidad y fraude |
 | `/docs/payment-code-walkthrough.html` | Recorrido comentado del código de pagos |
 | `/docs/code-to-emulate-in-real-project.html` | Código que sirve como referencia para un proyecto real |
+| `docs/release-checklist.md` | Checklist de release y smoke tests |
+| `docs/streambox-mock-contract.md` | Contrato mínimo entre StreamBox Demo y Mock Payment Service |
 
 También existe una guía Markdown en:
 

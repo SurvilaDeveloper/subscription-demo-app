@@ -13,10 +13,37 @@ public class DemoReceivedWebhook implements Serializable {
     private final String type;
     private final String action;
     private final String dataId;
+    private final String payload;
     private final boolean validSignature;
     private boolean processed;
     private String error;
     private final Instant receivedAt;
+
+    public DemoReceivedWebhook(
+            String id,
+            String requestId,
+            String signature,
+            String type,
+            String action,
+            String dataId,
+            String payload,
+            boolean validSignature,
+            boolean processed,
+            String error,
+            Instant receivedAt
+    ) {
+        this.id = id;
+        this.requestId = requestId;
+        this.signature = signature;
+        this.type = type;
+        this.action = action;
+        this.dataId = dataId;
+        this.payload = payload;
+        this.validSignature = validSignature;
+        this.processed = processed;
+        this.error = error;
+        this.receivedAt = receivedAt;
+    }
 
     public DemoReceivedWebhook(
             String id,
@@ -30,16 +57,19 @@ public class DemoReceivedWebhook implements Serializable {
             String error,
             Instant receivedAt
     ) {
-        this.id = id;
-        this.requestId = requestId;
-        this.signature = signature;
-        this.type = type;
-        this.action = action;
-        this.dataId = dataId;
-        this.validSignature = validSignature;
-        this.processed = processed;
-        this.error = error;
-        this.receivedAt = receivedAt;
+        this(
+                id,
+                requestId,
+                signature,
+                type,
+                action,
+                dataId,
+                null,
+                validSignature,
+                processed,
+                error,
+                receivedAt
+        );
     }
 
     public String getId() {
@@ -64,6 +94,10 @@ public class DemoReceivedWebhook implements Serializable {
 
     public String getDataId() {
         return dataId;
+    }
+
+    public String getPayload() {
+        return payload;
     }
 
     public boolean isValidSignature() {
